@@ -1,16 +1,30 @@
 # Apigee Pipeline Requirements for .NET Microservices Project (Devtest Focus)
 
+**Last Updated**: 2025-10-17
+**Status**: ⏳ Planning phase (10/17-10/19), implementation starts 10/20
+
 ## Overview
-This document defines the CI/CD pipeline requirements for a new project deploying multiple .NET microservices to Google Kubernetes Engine (GKE) with ArgoCD, fronted by a single Apigee instance for API management. The initial focus is on the `devtest` environment, with all artifacts (Docker images, Apigee proxies, Kubernetes manifests) deployed to `devtest`, tied to the `devtest` branch. Future environments (`dev`, `staging`, `prod`) will be supported, tied to branches: `dev` (dev), `staging` (staging), `main` (prod). Each service repository (e.g., `pcc-auth-api`) imports standardized pipeline logic from a central `pcc-pipeline-library` repository to ensure consistency and ease of new service creation. Terraform configurations are centralized in `pcc-tf-library`, while `pcc-app-shared-infra` manages deployed shared infrastructure. The setup is parameter-driven, uses GitHub and Cloud Build, and supports a developer portal.
+This document defines the CI/CD pipeline requirements for deploying multiple .NET microservices to Google Kubernetes Engine (GKE) with ArgoCD, fronted by Apigee X for API management. The initial focus is on the `devtest` environment, with all artifacts (Docker images, Apigee proxies, Kubernetes manifests) deployed to `devtest`. Future environments (`dev`, `staging`, `prod`) will be supported incrementally.
+
+**Key Architectural Decisions:**
+- **Two Apigee Organizations**: Nonprod org (devtest, dev, staging environments), Prod org (prod environment only)
+- **Single AlloyDB Cluster**: Shared cluster in pcc-app-shared-infra with 7 databases (one per microservice)
+- **Environment-Agnostic Images**: Docker images named `pcc-app-{service}` (no environment suffix), tagged with `v{major}.{minor}.{patch}.{buildid}`
+- **Three GKE Clusters**: 2 devops clusters (nonprod/prod for system services), 1 app cluster (pcc-prj-app-devtest for workloads)
+- **Existing Foundation**: 16 GCP projects already deployed (220 resources, 9/10 security score), only 2 Apigee projects need to be added
+
+Each service repository (e.g., `pcc-auth-api`) imports standardized pipeline logic from `pcc-pipeline-library` for consistency. Terraform configurations are centralized in `pcc-tf-library`, while `pcc-app-shared-infra` manages deployed shared infrastructure. Setup is parameter-driven using GitHub and Cloud Build.
 
 ## Scope
-- **Objective**: Automated pipelines deploying to `devtest` initially, with support for `dev`, `staging`, and `prod`, updating a shared Apigee instance (single domain, developer portal).
+- **Objective**: Automated pipelines deploying to `devtest` initially, with incremental support for `dev`, `staging`, and `prod` environments.
 - **Components**:
-  - .NET Core microservices (ASP.NET Core, generating OpenAPI specs via Swashbuckle).
-  - GKE cluster with ArgoCD for container deployments.
-  - Apigee for API management (proxies per service, shared API product).
+  - .NET 10 microservices (ASP.NET Core, pre-built OpenAPI specs).
+  - 3 GKE Autopilot clusters: pcc-prj-devops-nonprod, pcc-prj-devops-prod (ArgoCD host), pcc-prj-app-devtest (workloads).
+  - AlloyDB cluster with 7 PostgreSQL databases (auth_db_devtest, client_db_devtest, user_db_devtest, metric_builder_db_devtest, metric_tracker_db_devtest, task_builder_db_devtest, task_tracker_db_devtest).
+  - Flyway for database schema migrations in CI/CD pipeline.
+  - 2 Apigee X organizations: pcc-prj-apigee-nonprod (devtest/dev/staging), pcc-prj-apigee-prod (prod only).
   - Cloud Build for CI/CD, GitHub for source control.
-  - Artifact Registry, GCS, Secret Manager for storage and secrets.
+  - Artifact Registry in pcc-prj-devops-prod, GCS, Secret Manager for storage and secrets.
 - **Repositories**:
   - `pcc-pipeline-library`: Central pipeline templates and scripts.
   - Service repos: `pcc-auth-api`, `pcc-client-api`, `pcc-user-api`, `pcc-metric-builder-api`, `pcc-metric-tracker-api`, `pcc-task-builder-api`, `pcc-task-tracker-api`.
@@ -28,11 +42,11 @@ This document defines the CI/CD pipeline requirements for a new project deployin
 - **pcc-pipeline-library**:
   - `dotnet-apigee-pipeline.yaml`: Pipeline template for build, test, deploy, and Apigee proxy update.
   - `scripts/`:
-    - `build.sh`: Builds .NET project.
-    - `generate-spec.sh`: Generates service-specific OpenAPI spec (e.g., paths `/auth/*` for `pcc-auth-api`).
-    - `update-config.sh`: Updates `pcc-app-argo-config` for ArgoCD.
-    - `wait-argocd.sh`: Polls ArgoCD for healthy deployment.
-    - `deploy-apigee.sh`: Creates/deploys Apigee proxy, attaches to shared product.
+    - `build.sh`: Builds .NET 10 project, runs xUnit tests, executes Flyway migrations.
+    - `generate-spec.sh`: Locates pre-built OpenAPI spec from build artifacts, filters service-specific paths (e.g., `/auth/*` for `pcc-auth-api`).
+    - `update-config.sh`: Updates `pcc-app-argo-config` with new image tag for ArgoCD sync.
+    - `wait-argocd.sh`: Polls ArgoCD for healthy deployment (5 min timeout).
+    - `deploy-apigee.sh`: Creates/deploys Apigee proxy to nonprod org, configures routing.
   - `services-config.yaml`: List of services (e.g., `auth`, `client`, `user`, `metric-builder`, `metric-tracker`, `task-builder`, `task-tracker`).
 - **Service Repos** (`pcc-auth-api`, `pcc-client-api`, etc.):
   - .NET project files (e.g., `YourProject.sln`, `src/YourProject.WebAPI.csproj`).
@@ -54,21 +68,49 @@ This document defines the CI/CD pipeline requirements for a new project deployin
   - Other shared Terraform modules (e.g., for GCS, Secret Manager, if needed).
 
 ### 2. GCP Resources
-- **GKE Cluster**:
-  - ArgoCD installed (via Helm or manifests).
-  - Workload Identity enabled for Cloud Build access.
-  - Namespaces: `devtest` (initial), `dev`, `staging`, `prod` (future).
-  - Stable LoadBalancer/Ingress URL per service/env (e.g., `auth.devtest.svc.cluster.local`).
-- **Artifact Registry**: Stores Docker images (e.g., `gcr.io/$PROJECT_ID/pcc-app-$SERVICE_NAME-$ENVIRONMENT:$SHORT_SHA`).
-- **GCS Bucket**: Stores OpenAPI specs (e.g., `gs://pcc-specs-bucket/devtest/$SERVICE_NAME/openapi.json`).
+
+**Existing Foundation (pcc-foundation-infra):**
+- 16 GCP projects: 4 app, 4 data, 2 devops, 2 network, 2 systems, 1 logging, 1 bootstrap
+- 2 VPCs: prod (10.16.0.0/12), nonprod (10.24.0.0/12) with Shared VPC architecture
+- DevOps subnets already allocated: 10.16.128.0/20 (prod), 10.24.128.0/20 (nonprod)
+- 220 resources deployed, 9/10 security score
+
+**New Resources for Devtest:**
+
+- **GKE Clusters** (3 Autopilot clusters):
+  1. **pcc-prj-devops-nonprod**: System services, monitoring (subnet: 10.24.128.0/20 existing)
+  2. **pcc-prj-devops-prod**: ArgoCD primary instance (subnet: 10.16.128.0/20 existing)
+  3. **pcc-prj-app-devtest**: Application workloads (subnet: TBD from 10.24.0.0/12 range)
+  - Workload Identity enabled for Cloud Build access
+  - Namespaces per service (e.g., `pcc-auth-api`, `pcc-client-api`)
+  - Internal service endpoints (e.g., `pcc-auth-api.pcc-auth-api.svc.cluster.local`)
+
+- **AlloyDB Cluster** (pcc-app-shared-infra):
+  - Single cluster in us-east4, high availability
+  - 7 databases: auth_db_devtest, client_db_devtest, user_db_devtest, metric_builder_db_devtest, metric_tracker_db_devtest, task_builder_db_devtest, task_tracker_db_devtest
+  - Private Service Connect for GKE access
+  - Flyway manages schema migrations via CI/CD
+
+- **Artifact Registry** (pcc-prj-devops-prod):
+  - Stores Docker images (e.g., `gcr.io/$PROJECT_ID/pcc-app-auth:v1.2.3.abc123`)
+  - **NO environment suffix in image name**, only in tags
+  - Tag format: `v{major}.{minor}.{patch}.{buildid}` (e.g., v1.2.3.abc123)
+  - ArgoCD references specific tags per environment
+
+- **GCS Bucket**: Stores OpenAPI specs (e.g., `gs://pcc-specs-bucket/devtest/$SERVICE_NAME/openapi.json`)
+
 - **Secret Manager**:
-  - `git-token`: GitHub PAT for cloning `pcc-pipeline-library` and `pcc-app-argo-config`.
-  - `argocd-password`: ArgoCD admin password.
-  - `apigee-access-token`: Apigee CLI access token.
-- **Apigee**:
-  - One organization (`pcc-org`), managed via `pcc-tf-library`.
-  - Environment: `devtest` (initial), `dev`, `staging`, `prod` (future).
-  - Shared API product: `pcc-all-services-devtest` (e.g., `devtest-api.pccdomain.com`).
+  - `git-token`: GitHub PAT for cloning repositories
+  - `argocd-password`: ArgoCD admin password
+  - `apigee-access-token`: Apigee CLI access token
+  - `alloydb-credentials`: Database connection credentials per service
+
+- **Apigee X Organizations**:
+  - **Nonprod org** (pcc-prj-apigee-nonprod): Environments for devtest, dev, staging
+    - Subnets: 10.24.192.0/20 (runtime), 10.24.208.0/20 (management), 10.24.224.0/20 (troubleshooting), 10.24.240.0/20 (overflow)
+  - **Prod org** (pcc-prj-apigee-prod): Environment for prod only (deferred)
+    - Subnets: 10.16.192.0/20 (runtime), 10.16.208.0/20 (management), 10.16.224.0/20 (troubleshooting), 10.16.240.0/20 (overflow)
+  - Initial focus: Nonprod org with devtest environment only
 
 ### 3. Service Account Permissions
 - **Cloud Build Service Account** (`PROJECT_NUMBER@cloudbuild.gserviceaccount.com`):
@@ -85,20 +127,25 @@ This document defines the CI/CD pipeline requirements for a new project deployin
 
 ### 4. Pipeline Steps
 Each service pipeline (e.g., `pcc-auth-api/cloudbuild.yaml`) targets the `devtest` environment, triggered on push to the `devtest` branch:
-1. **Build .NET**: Compile project, run tests (if applicable).
-2. **Generate OpenAPI Spec**: Run app briefly, curl Swagger endpoint (e.g., `/swagger/v1/swagger.json`), filter to service paths (e.g., `/auth/*`), upload to GCS (`gs://pcc-specs-bucket/devtest/auth/openapi.json`).
-3. **Build/Push Docker Image**: Build image, push to Artifact Registry (e.g., `gcr.io/$PROJECT_ID/pcc-app-auth-devtest:$SHORT_SHA`).
-4. **Update Config Repo**: Update manifest in `pcc-app-argo-config/devtest/auth/deployment.yaml` to trigger ArgoCD.
-5. **Wait for ArgoCD**: Poll for healthy deployment (`Healthy` and `Synced`, 5 min timeout) for `argocd-app-auth-devtest`.
-6. **Deploy Apigee Proxy**: Download spec from GCS, use `apigeecli` to create/deploy proxy (e.g., `auth-devtest` proxy), attach to `pcc-all-services-devtest` product.
+
+1. **Build .NET**: Compile .NET 10 project, run xUnit tests, Flyway migrations.
+2. **Extract OpenAPI Spec**: Locate pre-built OpenAPI spec from build artifacts (NOT generated at runtime), filter to service-specific paths (e.g., `/auth/*`), upload to GCS (`gs://pcc-specs-bucket/devtest/auth/openapi.json`).
+3. **Build/Push Docker Image**:
+   - Build image with environment-agnostic name: `pcc-app-auth` (NO environment suffix)
+   - Tag with semantic version + buildid: `v1.2.3.abc123`
+   - Push to Artifact Registry: `gcr.io/$PROJECT_ID/pcc-app-auth:v1.2.3.abc123`
+4. **Update Config Repo**: Update manifest in `pcc-app-argo-config` with new image tag, commit to trigger ArgoCD sync.
+5. **Wait for ArgoCD**: Poll ArgoCD for healthy deployment (`Healthy` and `Synced`, 5 min timeout).
+6. **Deploy Apigee Proxy**: Download spec from GCS, use `apigeecli` to create/deploy proxy to nonprod Apigee org devtest environment.
 
 - **Parameters** (Cloud Build substitutions):
-  - `_SERVICE_NAME`: e.g., `auth`, `client`.
-  - `_DOCKER_REPO`: e.g., `pcc-app-auth-devtest`, `pcc-app-client-devtest`.
-  - `_ARGO_APP_NAME`: e.g., `auth-app-devtest`, `client-app-devtest`.
-  - `_ENVIRONMENT`: `devtest` (initial), `dev`, `staging`, `prod` (future).
-  - `_REGION`: e.g., `us-central1`.
-- **Trigger**: Push to `devtest` branch in service repo (e.g., `pcc-auth-api/devtest`).
+  - `_SERVICE_NAME`: e.g., `auth`, `client`, `user`
+  - `_IMAGE_NAME`: e.g., `pcc-app-auth` (NO environment suffix)
+  - `_VERSION`: Semantic version from repo (e.g., `1.2.3`)
+  - `_BUILD_ID`: Cloud Build ID for unique tagging
+  - `_ENVIRONMENT`: `devtest` (for targeting correct Apigee env and namespace)
+  - `_REGION`: `us-east4`
+- **Trigger**: Push to `devtest` branch in service repo (e.g., `pcc-auth-api/devtest`)
 
 ### 5. Terraform Configuration (pcc-tf-library)
 - **Purpose**: Centralize all Terraform configurations for Apigee and other shared resources.
@@ -137,13 +184,29 @@ Each service pipeline (e.g., `pcc-auth-api/cloudbuild.yaml`) targets the `devtes
   - Log errors in Cloud Build.
 
 ### 9. Multi-Environment Support
-- **Current**: Deploy to `devtest` environment (`devtest` branch, `devtest` namespace, `devtest` Apigee env).
-- **Future**:
-  - `dev`: `dev` branch, `dev` namespace, `dev` Apigee env.
-  - `staging`: `staging` branch, `staging` namespace, `staging` Apigee env.
-  - `prod`: `main` branch, `prod` namespace, `prod` Apigee env.
-- **Approvals**: Manual for `staging` and `prod` in Cloud Build (e.g., approval step).
-- **Substitutions**: `_ENVIRONMENT` to vary namespaces, buckets, and Apigee envs.
+
+**Apigee Organization Mapping:**
+- **Nonprod Apigee org** (pcc-prj-apigee-nonprod): Hosts devtest, dev, staging environments
+- **Prod Apigee org** (pcc-prj-apigee-prod): Hosts prod environment only
+
+**Environment Roadmap:**
+- **Current Phase**: Deploy to `devtest` environment only
+  - Branch: `devtest`
+  - GKE cluster: pcc-prj-app-devtest
+  - AlloyDB databases: *_devtest suffix
+  - Apigee: nonprod org, devtest environment
+
+- **Future Phases**:
+  - **Dev**: `dev` branch → pcc-prj-app-dev cluster → nonprod Apigee org, dev environment
+  - **Staging**: `staging` branch → pcc-prj-app-staging cluster → nonprod Apigee org, staging environment
+  - **Prod**: `main` branch → pcc-prj-app-prod cluster → prod Apigee org, prod environment
+
+**Key Strategy:**
+- Staging uses nonprod Apigee org (not prod)
+- Image tags differentiate environments (same image name: `pcc-app-auth`, different tags: `v1.2.3.abc123`)
+- ArgoCD manifests per environment reference appropriate image tag
+- Approvals required for staging and prod deployments
+- `_ENVIRONMENT` substitution varies namespaces, Apigee envs, database connections
 
 ### 10. Maintenance
 - **Updates**: Modify `pcc-pipeline-library` for pipeline changes; services adopt on next build.
@@ -165,24 +228,70 @@ Each service pipeline (e.g., `pcc-auth-api/cloudbuild.yaml`) targets the `devtes
 - **Networking**: ~$0.08/GB egress.
 - Use [GCP Pricing Calculator](https://cloud.google.com/products/calculator) for estimates.
 
-### 12. Next Steps
-- **Week 1-2**: Set up `pcc-pipeline-library` and `pcc-tf-library`, POC with `pcc-auth-api` and `pcc-client-api` in `devtest`, enable Apigee evaluation.
-- **Week 3**: Configure dev portal, test JWT auth for React client.
-- **Month 2**: Roll out remaining services (`pcc-user-api`, etc.), deploy Terraform in `pcc-tf-library` to `pcc-app-shared-infra`.
-- **Month 3**: Plan `dev`, `staging`, `prod` environments (new branches, namespaces, Apigee envs).
-- **DevOps Team**:
-  - Create GCS buckets, Secret Manager secrets.
-  - Set up Cloud Build triggers for `devtest` branch in each service repo.
-  - Validate ArgoCD setup in `pcc-app-argo-config` (auto-sync enabled).
-  - Test pipeline with a small code change in `pcc-auth-api/devtest`.
-  - Initialize Terraform in `pcc-tf-library` for Apigee setup.
-- **Documentation**: Update runbooks with pipeline flow, share Apigee endpoint for client integration.
+### 12. Deployment Phases
 
-### 13. Assumptions & Notes
-- GKE backend URLs are stable; if dynamic, use Terraform data sources in `pcc-tf-library`.
-- Apigee org/env setup is one-time via Terraform in `pcc-tf-library`.
-- Pipeline runtime: ~10-15 minutes (includes clone, build, deploy).
-- Team has GitLab CI experience, easing transition to clone-based library.
-- All artifacts deploy to `devtest` initially; multi-branch strategy to be implemented later.
+Detailed phase-by-phase deployment plan documented in: `.claude/plans/devtest-deployment-phases.md`
 
-For questions, refer to GCP Apigee docs or GitHub/Cloud Build guides.
+**Summary:**
+- **Phase 0**: Add 2 Apigee projects to pcc-foundation-infra
+- **Phase 1**: Networking for devtest (app-devtest subnet, Private Service Connect)
+- **Phase 2**: AlloyDB cluster + 7 databases
+- **Phase 3**: 3 GKE clusters (devops-nonprod, devops-prod, app-devtest)
+- **Phase 4**: ArgoCD on devops-prod cluster
+- **Phase 5**: Pipeline library (pcc-pipeline-library)
+- **Phase 6**: First service deployment (pcc-auth-api end-to-end)
+- **Phase 7**: Apigee nonprod org + devtest environment
+
+**Timeline:**
+- **Planning**: 10/17-10/19 (Fri-Sun) - Requirements finalization, phase planning
+- **Implementation**: Starting 10/20 (Mon) - Sequential phase execution
+- **Duration**: 2-3 weeks for all 7 phases
+
+### 13. Next Steps
+
+**Immediate (Planning Phase 10/17-10/19):**
+- Review and refine phase plans in `.claude/plans/devtest-deployment-phases.md`
+- Finalize network subnet allocation for pcc-prj-app-devtest
+- Prepare terraform configurations for each phase
+- Document validation criteria per phase
+
+**Implementation Phase (Starting 10/20):**
+- Execute Phase 0: Add Apigee projects to foundation
+- Execute Phase 1: Configure networking
+- Execute Phase 2: Deploy AlloyDB cluster
+- Continue through Phase 7 sequentially
+
+**Post-Devtest:**
+- Expand to dev environment (nonprod Apigee, pcc-prj-app-dev)
+- Deploy remaining 6 microservices using established pipeline
+- Configure staging environment (nonprod Apigee, pcc-prj-app-staging)
+- Plan prod environment (separate deployment plan)
+
+### 14. Assumptions & Notes
+
+**Architecture Assumptions:**
+- 16 GCP projects already exist in pcc-foundation-infra (220 resources deployed)
+- DevOps GKE subnets already allocated (10.16.128.0/20 prod, 10.24.128.0/20 nonprod)
+- Shared VPC architecture in place with 2 VPC hosts
+- 9/10 security score on existing foundation (production-ready)
+
+**Technical Assumptions:**
+- .NET 10 services with pre-built OpenAPI specs (not runtime-generated)
+- AlloyDB Private Service Connect provides database connectivity to GKE
+- ArgoCD in pcc-prj-devops-prod manages all environment deployments
+- Flyway handles database schema migrations via CI/CD pipeline
+- Pipeline runtime: ~10-15 minutes per service deployment
+
+**Deployment Strategy:**
+- Initial focus: devtest environment only (Phases 0-7)
+- Sequential phase execution with validation gates
+- No manual GCP console operations (100% Terraform + GitOps)
+- Image tags (not image names) differentiate environments
+
+**References:**
+- Detailed phases: `.claude/plans/devtest-deployment-phases.md`
+- ADR 001: `.claude/docs/ADR/001-two-org-apigee-architecture.md`
+- Foundation state: `core/pcc-foundation-infra/.claude/status/brief.md`
+- Network design: `core/pcc-foundation-infra/.claude/reference/GCP Network Subnets - GKE Subnet Assignment Redesign.pdf`
+
+For questions, refer to GCP Apigee X docs, Cloud Build guides, or project documentation in `.claude/` directory.

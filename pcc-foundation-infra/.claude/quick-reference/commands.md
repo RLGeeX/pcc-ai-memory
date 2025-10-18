@@ -1,38 +1,43 @@
 # Terraform Commands
 
-This section provides a list of essential CLI commands for managing the Terraform configuration in the `.claude` project. These commands focus on initialization, validation, formatting, linting, planning, applying, destroying, and cloud provider authentication. Ensure you have Terraform installed and configured for your environment.
+This section provides a list of essential CLI commands for managing the Terraform project in the `.claude` directory. These commands focus on initialization, validation, formatting, linting, planning, applying, and destroying infrastructure configurations. Ensure you are in the `.claude` directory when running these commands.
 
-- **Initialize the Terraform working directory**  
-  `terraform init`  
-  *Initializes the project, downloads required providers and modules, and sets up the backend. Run this after cloning the repository.*
+- **Initialize Terraform**: Sets up the working directory by downloading required providers and modules.  
+  `terraform init`
 
-- **Format Terraform configuration files**  
-  `terraform fmt`  
-  *Automatically formats `.tf` files to adhere to Terraform's style conventions. Use `-recursive` for subdirectories: `terraform fmt -recursive`.*
+- **Format Terraform Code**: Formats the Terraform configuration files to a canonical style and applies formatting conventions.  
+  `terraform fmt`
 
-- **Validate Terraform configuration**  
-  `terraform validate`  
-  *Checks the syntax and internal consistency of the configuration files without performing a plan.*
+- **Validate Terraform Configuration**: Checks whether the configuration is syntactically valid and internally consistent.  
+  `terraform validate`
 
-- **Lint Terraform configuration with tflint**  
-  `tflint`  
-  *Runs TFLint to detect potential errors, best practices violations, and enforce coding standards. Install TFLint separately if not already available.*
+- **Lint with TFLint**: Runs TFLint to detect potential errors, enforce best practices, and identify violations in the Terraform code. (Install TFLint separately via `brew install tflint` or equivalent.)  
+  `tflint`
 
-- **Generate an execution plan**  
-  `terraform plan`  
-  *Creates a preview of changes that will be made to the infrastructure without applying them. Use `-out=plan.tfplan` to save the plan: `terraform plan -out=plan.tfplan`.*
+- **Plan Changes**: Creates an execution plan, showing what actions Terraform will take without applying them.  
+  `terraform plan`
 
-- **Apply the Terraform configuration**  
-  `terraform apply`  
-  *Provisions or updates the infrastructure as defined in the configuration. Use with a saved plan: `terraform apply plan.tfplan`.*
+- **Apply Configuration**: Applies the changes required to reach the desired state as defined in the configuration files.  
+  `terraform apply`
 
-- **Destroy all managed infrastructure**  
-  `terraform destroy`  
-  *Removes all resources managed by the configuration. Confirm with `-auto-approve` to skip interactive prompts: `terraform destroy -auto-approve`.*
+- **Destroy Infrastructure**: Destroys all resources managed by the configuration. Use with caution.  
+  `terraform destroy`
 
-- **Authenticate with cloud provider (AWS example)**  
-  `aws configure`  
-  *Sets up AWS credentials for Terraform to use the AWS provider. Replace with equivalent commands for other providers (e.g., `gcloud auth login` for GCP, `az login` for Azure).*
+## Cloud Provider Authentication
 
-## Notes
+Before running Terraform commands that interact with cloud providers (e.g., AWS, Azure, GCP), ensure proper authentication is set up. Common methods include:
+
+- **AWS (using AWS CLI)**: Install and configure the AWS CLI, then run `aws configure` to set up credentials.  
+  `aws configure`
+
+- **Azure (using Azure CLI)**: Install and log in to Azure CLI.  
+  `az login`
+
+- **GCP (using gcloud CLI)**: Install and initialize the gcloud CLI, then authenticate.  
+  `gcloud auth login`  
+  `gcloud init`
+
+Refer to the respective cloud provider's documentation for detailed authentication setup.
+
+## Note
 Run `terraform init` after cloning the repository. Add new commands here as discovered.

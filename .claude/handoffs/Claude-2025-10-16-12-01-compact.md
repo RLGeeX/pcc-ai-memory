@@ -2,7 +2,7 @@
 
 ## Project Context
 - Addressing critical Codex review findings for Phase 1 Apigee infrastructure plan in pcc-foundation-infra
-- Working on `/home/jfogarty/git/pcc/pcc-project/.claude/plans/phase-1-foundation-infrastructure.md`
+- Working on `@.claude/plans/phase-1-foundation-infrastructure.md`
 
 ## Completed Tasks
 - ✅ **#1 Networking Specification**: Created comprehensive Apigee X networking spec at `pcc-foundation-infra/docs/apigee-x-networking-specification.md` covering VPC peering, service networking connection, Cloud NAT, /22 IP ranges

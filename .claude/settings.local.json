@@ -1,13 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "mcp__zen__listmodels",
-      "mcp__zen__planner",
-      "mcp__zen__chat",
-      "mcp__zen__clink",
       "Bash(gemini -p \"$(cat <<''EOF''\nResearch comprehensive Terraform patterns for GCP Apigee X provisioning including:\n1. google_apigee_organization resource configuration\n2. google_apigee_environment setup with service accounts\n3. google_apigee_instance for runtime instances\n4. IAM bindings for Apigee service accounts\n5. Artifact Registry integration\n6. Secret Manager for API credentials\n7. GCS bucket for OpenAPI specs storage\n\nProvide complete Terraform module examples following Google best practices.\nInclude variable definitions, outputs, and proper dependency management.\nFocus on production-ready patterns with error handling and documentation.\nEOF\n)\")",
       "mcp__context7__resolve-library-id",
-      "mcp__context7__get-library-docs"
+      "mcp__context7__get-library-docs",
+      "mcp__jira-pcc__getAccessibleAtlassianResources",
+      "mcp__jira-ti__getAccessibleAtlassianResources"
     ],
     "deny": [],
     "ask": []

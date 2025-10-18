@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(tree:*)",
+      "Read(//home/cfogarty/git/ai-memory/pcc-foundation-infra/.claude/handoffs/**)",
+      "Read(//home/cfogarty/git/ai-memory/pcc-foundation-infra/.claude/plans/**)",
+      "Read(//home/cfogarty/git/ai-memory/pcc-foundation-infra/.claude/status/**)",
+      "Bash(gcloud organizations get-iam-policy:*)",
+      "Bash(chmod:*)",
+      "Bash(find:*)",
+      "Bash(for dir in */)",
+      "Bash(do echo \"Checking $dir...\")",
+      "Bash(terraform:*)",
+      "Bash(done)",
+      "Bash(bash:*)",
+      "Bash(for:*)",
+      "Bash(cat:*)",
+      "mcp__context7__resolve-library-id",
+      "mcp__context7__get-library-docs",
+      "Bash(./terraform-with-impersonation.sh plan:*)",
+      "Bash(./terraform-with-impersonation.sh state:*)",
+      "Read(//tmp/**)",
+      "Bash(./terraform-with-impersonation.sh show:*)",
+      "mcp__pcc-jira__getJiraIssue"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

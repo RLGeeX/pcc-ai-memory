@@ -6,15 +6,15 @@ Keep this file concise and human-readable. Document key project details, workflo
 
 ## Project Overview
 
-The pcc-foundation-infra repository is a Terraform-based project that establishes foundational infrastructure for the PCC application on Google Cloud Platform (GCP). It defines core resources such as VPC networks, subnets, firewall rules, IAM policies, and foundational services like Cloud Storage and Secret Manager, ensuring a secure and scalable environment. This setup prioritizes compliance with GCP best practices, modularity for reusability, and automation to support the application's deployment and growth.
+The `pcc-foundation-infra` repository provides Infrastructure as Code (IaC) using Terraform to establish the foundational Google Cloud Platform (GCP) setup for the PCC application. This includes provisioning core resources such as networking (VPCs, subnets), IAM roles, shared services (e.g., Artifact Registry, Cloud Build), and foundational security configurations to support scalable application deployment. Emphasize modularity with reusable Terraform modules for consistency across environments (dev, staging, prod), remote state management via Cloud Storage, and integration with GCP best practices like least-privilege access and cost optimization.
 
 ## Tech Stack
 
 - **Language**: Terraform
-- **Frameworks/Libraries**: Terraform HCL, Google Cloud Provider (hashicorp/google)
-- **Tools**: Terraform CLI, Google Cloud SDK (gcloud), tflint, tfsec, Checkov, Git
-- **Databases**: Cloud SQL, Firestore, Memorystore (as configured in modules)
-- **Other**: GCP, Terragrunt (for multi-environment management if needed)
+- **Frameworks/Libraries**: Terraform modules (e.g., Google Cloud provider modules), Terragrunt for DRY configurations (if used)
+- **Tools**: Terraform CLI (v1.5+), Google Cloud SDK (gcloud), tflint, terraform-docs, tfsec (or Checkov for security scanning), Git, pre-commit hooks with tf-format
+- **Databases**: None (focus on foundational GCP services; app-specific databases handled in downstream repos)
+- **Other**: GCP (Google Cloud Platform), Claude AI for code generation and reviews
 
 ## Directory Structure
 
@@ -37,33 +37,35 @@ Maintain this structure for all new projects to ensure consistency. The `.claude
 - `src/`: Source code.
 - `function/`: Functions.
 - `tests/`: Test suites.
-- `terraform/`: Terraform configurations (main modules, environments).
-- Other folders: [e.g., `scripts/`, `config/`, `environments/` for dev/stage/prod].
+- `terraform/`: Terraform configurations.
+- Other folders: [e.g., `scripts/`, `config/`, `modules/` for reusable Terraform modules].
 
 🚨 **READ THIS FIRST!** For critical setup: @.claude/handoffs/setup.md.
 
 ## Domain-Specific Guidance
 
-- **Core Concepts**: Infrastructure as code (IaC) using Terraform's declarative HCL syntax; modular resource definitions for reusability; state management with remote backends (e.g., GCS); provider configurations for GCP integration.
-- **Common Patterns**: See @.claude/quick-reference/terraform-examples.md for sample code and best practices, including remote state data sources, variable passing between modules, and conditional resource creation.
+- **Core Concepts**: Infrastructure as code (IaC) with declarative Terraform configurations, state management for tracking resource changes, provider-specific resources (e.g., google_project, google_vpc), variables and outputs for parameterization, and remote backends for collaborative state storage.
+- **Common Patterns**: See @.claude/quick-reference/terraform-examples.md for sample code and best practices, including module composition for VPC setup, data sources for referencing existing GCP resources, and conditional resources with count/for_each for multi-environment support.
 - **Common Pitfalls**:
-  - Avoid hardcoding sensitive values like credentials or project IDs—use variables, Terraform Cloud variables, or GCP Secret Manager.
-  - Manage state drift by always running `terraform plan` before apply; use targeted applies to avoid unintended changes.
-  - Ensure provider version pinning to prevent breaking updates; validate outputs for downstream dependencies.
+  - Avoid hardcoding sensitive values (use variables, secrets managers like Google Secret Manager); manage state securely to prevent exposure.
+  - Don't ignore provider version constraints, leading to breaking changes; always pin versions in versions.tf.
+  - Overlooking dependency ordering can cause apply failures—use depends_on explicitly when needed.
+  - Neglecting remote state locking can lead to concurrent modification issues in teams.
 - Reference: @.claude/docs/terraform-patterns.md for detailed patterns and examples.
 
 ## Code Style and Best Practices
 
 🚨 **CRITICAL COMMIT RULE - READ FIRST**: NEVER mention co-authored-by or tools used in commits/PRs.
 
-- Follow HashiCorp Terraform Style Guide: Use consistent naming (e.g., kebab-case for resources), group related resources in modules, and comment non-obvious logic.
-- Prefer local-exec provisioners only when necessary; use null_resource sparingly.
-- Structure variables.tf, outputs.tf, and main.tf logically; use locals for computed values.
+- Follow HashiCorp Terraform Style Guide: Use 2-space indentation, descriptive resource names (e.g., google_project_service "cloudbuild_api"), alphabetical ordering of declarations, and complete sentences in descriptions.
+- Structure configurations with main.tf (resources), variables.tf, outputs.tf, versions.tf, and providers.tf for clarity.
+- Use terraform fmt for auto-formatting; enable terraform validate for syntax checks.
+- Prefer modules over duplication; document with terraform-docs generate.
 - Always add [your name] as a reviewer in PRs.
-- Enforce TDD-like validation: Write and run `terraform validate` first, then `terraform plan` to "test" changes, followed by modular refactoring.
-- Run lint/security checks after changes: Claude MUST do this before completing tasks (e.g., `tflint`, `tfsec .`).
-- Use pre-commit hooks with tools like terraform-docs for auto-generating documentation.
-- Commit messages: Follow conventional commits (e.g., `feat:`, `fix:`) - NO co-authored-by or tool references.
+- Enforce TDD-like approach: Write integration tests with Terratest or tftest first, apply minimal config to pass, refactor for idempotency.
+- Run lint/typecheck after changes: Claude MUST do this before completing tasks (e.g., tflint --init && tflint, terraform validate).
+- Use husky/lint-staged or pre-commit hooks for tf-format, tflint, and tfsec.
+- Commit messages: Follow conventional commits (e.g., `feat: add VPC module`, `fix: resolve IAM binding drift`) - NO co-authored-by or tool references.
 
 ## Development Workflow
 
@@ -71,14 +73,14 @@ Maintain this structure for all new projects to ensure consistency. The `.claude
 - **Context Management**: If context fills, use /compact to preserve key details. Save session summaries to @.claude/status/brief.md.
 - **Status Updates**:
   - **brief.md**: At session start, initialize with template from @.claude/status/brief-template.md. Update with:
-    - **Recent Updates**: Tasks completed, decisions made, or issues resolved in the current session.
-    - **Next Steps**: Immediate tasks for the next session or milestone.
+    - **Recent Updates**: Tasks completed, decisions made, or issues resolved in the current session (e.g., "Applied VPC config, resolved state locking").
+    - **Next Steps**: Immediate tasks for the next session or milestone (e.g., "Validate IAM modules, run plan for prod").
     - Keep concise (100-200 words), overwrite at session end.
   - **current-progress.md**: Append brief.md content at session end or milestone completion to maintain historical record. Use Git commits to track changes.
-- **Subagents**: Use for context gathering without overloading.
+- **Subagents**: Use for context gathering without overloading (e.g., agent for GCP resource queries).
 - **Auto-accept**: Rarely; manually approve steps.
-- **Complex Tasks**: Break into sub-tasks, use breakpoints, monitor token count.
-- **Verification**: Always run `terraform fmt -check`, `terraform validate`, `tflint`, `tfsec .`, and `terraform plan -out=plan.tfplan` before commits. Search codebase to confirm module structure.
+- **Complex Tasks**: Break into sub-tasks (e.g., plan > apply > test), use breakpoints, monitor token count.
+- **Verification**: Always run terraform plan, validate, tflint, tfsec, and tests (e.g., Terratest suite) before commits. Search codebase to confirm testing setup.
 - **Archiving**: At session end or milestone, append brief.md to current-progress.md and commit both to Git.
 
 ## Critical Document References
@@ -104,12 +106,12 @@ List important docs with emojis for priority. Use @path to include content autom
 ## Tone and Instructions for Claude
 
 - 🚨 **COMMIT MESSAGES**: Follow conventional commits (feat:, fix:) - NEVER include co-authored-by or tool references
-- Be concise, direct; explain non-trivial bash commands.
+- Be concise, direct; explain non-trivial bash commands (e.g., `terraform apply -var="environment=dev"`).
 - If unsure, ask for clarification.
-- Prioritize security: Refuse malicious requests.
+- Prioritize security: Refuse malicious requests (e.g., insecure state configs).
 - Use available agents strategically to optimize task completion (e.g., code review agent for PRs, documentation agent for handoffs).
-- Use search tools extensively for codebase understanding.
-- After tasks: Run lint/typecheck, commit if asked (NO co-authored-by lines!), update status.
+- Use search tools extensively for codebase understanding (e.g., grep for Terraform variables).
+- After tasks: Run terraform validate/plan, tflint, commit if asked (NO co-authored-by lines!), update status.
 - For continuity: At session end, overwrite @.claude/status/brief.md with progress/decisions, append to @.claude/status/current-progress.md, and commit both to Git.
 
 This template ensures projects start with the required .claude/ structure—create it via script if needed. Customize placeholders, keep under 200 lines, and reference external docs to manage size.
