@@ -41,6 +41,13 @@ EOF
 - `-y, --yolo`: Auto-approve all tool calls (use with caution)
 - `--telemetry false`: Disable telemetry
 
+**🚨 IMPORTANT - Timeout for Long-Running Prompts:**
+When calling Gemini via Bash tool, ALWAYS use a 10-minute timeout (600000ms) to prevent background process issues:
+```bash
+# Bash tool with 10-minute timeout
+Bash(command: 'gemini -p "..."', timeout: 600000)
+```
+
 **Configuration:**
 - Settings: `~/.gemini/settings.json`
 - OAuth credentials: `~/.gemini/oauth_creds.json`
@@ -97,6 +104,13 @@ codex exec "Review this code" --files src/auth/login.cs
 - `--json`: Output in JSON format
 - `--dangerously-bypass-approvals-and-sandbox`: Auto-approve tool calls (use with caution)
 - `-c, --config`: Override config values
+
+**🚨 IMPORTANT - Timeout for Long-Running Prompts:**
+When calling Codex via Bash tool, ALWAYS use a 10-minute timeout (600000ms) to prevent background process issues:
+```bash
+# Bash tool with 10-minute timeout
+Bash(command: 'codex exec --skip-git-repo-check "..."', timeout: 600000)
+```
 
 **Configuration:**
 - Config: `~/.codex/config.toml`
@@ -171,14 +185,15 @@ EOF
 
 ## Best Practices
 
-1. **Use heredoc for multi-line prompts** - Cleaner than string concatenation
-2. **Provide context** - Include file paths, architecture, requirements
-3. **Specify role** - "You are a [role]" at the start of prompts
-4. **Define output format** - Request structured output (markdown, sections, bullet points)
-5. **Capture output** - Redirect to files for further processing
-6. **Gemini for research** - Has web search, 1M context window
-7. **Codex for code** - Deep code understanding, repo analysis
-8. **Claude for reasoning** - Complex problem solving, architectural decisions
+1. **🚨 ALWAYS use 10-minute timeout** - Set `timeout: 600000` in Bash tool to prevent background processes
+2. **Use heredoc for multi-line prompts** - Cleaner than string concatenation
+3. **Provide context** - Include file paths, architecture, requirements
+4. **Specify role** - "You are a [role]" at the start of prompts
+5. **Define output format** - Request structured output (markdown, sections, bullet points)
+6. **Capture output** - Redirect to files for further processing
+7. **Gemini for research** - Has web search, 1M context window
+8. **Codex for code** - Deep code understanding, repo analysis
+9. **Claude for reasoning** - Complex problem solving, architectural decisions
 
 ## Common Workflows
 

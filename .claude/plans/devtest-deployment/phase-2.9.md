@@ -70,39 +70,21 @@ module.alloydb_cluster_devtest.google_alloydb_instance.replica[0]: Still creatin
 module.alloydb_cluster_devtest.google_alloydb_instance.replica[0]: Still creating... [5m0s elapsed]
 module.alloydb_cluster_devtest.google_alloydb_instance.replica[0]: Creation complete after 8m15s
 
-module.alloydb_cluster_devtest.google_alloydb_database.databases["auth_db_devtest"]: Creating...
-module.alloydb_cluster_devtest.google_alloydb_database.databases["client_db_devtest"]: Creating...
-module.alloydb_cluster_devtest.google_alloydb_database.databases["user_db_devtest"]: Creating...
-module.alloydb_cluster_devtest.google_alloydb_database.databases["metric_builder_db_devtest"]: Creating...
-module.alloydb_cluster_devtest.google_alloydb_database.databases["metric_tracker_db_devtest"]: Creating...
-module.alloydb_cluster_devtest.google_alloydb_database.databases["task_builder_db_devtest"]: Creating...
-module.alloydb_cluster_devtest.google_alloydb_database.databases["task_tracker_db_devtest"]: Creating...
-
-module.alloydb_cluster_devtest.google_alloydb_database.databases["auth_db_devtest"]: Creation complete after 12s
-module.alloydb_cluster_devtest.google_alloydb_database.databases["client_db_devtest"]: Creation complete after 14s
-... (other databases complete) ...
-
-Apply complete! Resources: 10 added, 0 changed, 0 destroyed.
+Apply complete! Resources: 3 added, 0 changed, 0 destroyed.
 
 Outputs:
 
 alloydb_devtest_cluster_id = "pcc-alloydb-cluster-devtest"
-alloydb_devtest_databases = [
-  "auth_db_devtest",
-  "client_db_devtest",
-  "user_db_devtest",
-  "metric_builder_db_devtest",
-  "metric_tracker_db_devtest",
-  "task_builder_db_devtest",
-  "task_tracker_db_devtest",
-]
 alloydb_devtest_primary_connection_string = <sensitive>
 alloydb_devtest_primary_ip = "10.28.0.5"  # Internal AlloyDB IP (not for direct connection)
 alloydb_devtest_replica_ip = "10.28.0.6"  # Internal AlloyDB IP (not for direct connection)
 alloydb_devtest_psc_dns = "xxxx.xxxx.alloydb.goog"  # PSC DNS name (use this for connections)
 ```
 
-**Note**: Cluster creation can take 15-20 minutes (Google provisions infrastructure)
+**Note**:
+- Cluster creation can take 15-20 minutes (Google provisions infrastructure)
+- AlloyDB auto-creates default `postgres` database (not shown in Terraform output)
+- Database `client_api_db_devtest` will be created by Flyway migrations (Phase 2.7), not Terraform
 
 ---
 
@@ -194,17 +176,11 @@ gcloud alloydb databases list \
 
 **Expected Output**:
 ```
-NAME                           CLUSTER
-auth_db_devtest                pcc-alloydb-cluster-devtest
-client_db_devtest              pcc-alloydb-cluster-devtest
-user_db_devtest                pcc-alloydb-cluster-devtest
-metric_builder_db_devtest      pcc-alloydb-cluster-devtest
-metric_tracker_db_devtest      pcc-alloydb-cluster-devtest
-task_builder_db_devtest        pcc-alloydb-cluster-devtest
-task_tracker_db_devtest        pcc-alloydb-cluster-devtest
+NAME                      CLUSTER
+client_api_db_devtest     pcc-alloydb-cluster-devtest
 ```
 
-**Validation**: 7 databases created
+**Validation**: 1 database created (client_api_db_devtest)
 
 ---
 
@@ -248,8 +224,8 @@ PostgreSQL 15.x (Google AlloyDB)
 **Purpose**: Initialize Flyway schema_history table (mark V0 as baseline)
 
 ```bash
-# Navigate to first microservice (auth-api)
-cd ~/pcc/src/pcc-auth-api
+# Navigate to microservice (client-api)
+cd ~/pcc/src/pcc-client-api
 
 # Retrieve Flyway credentials from Secret Manager
 export DB_USER=$(gcloud secrets versions access latest \
@@ -273,7 +249,7 @@ flyway -configFiles=flyway.conf migrate
 ```
 Flyway Community Edition 9.22.0 by Redgate
 
-Database: jdbc:postgresql://127.0.0.1:5433/auth_db_devtest (PostgreSQL 15.x)
+Database: jdbc:postgresql://127.0.0.1:5433/client_api_db_devtest (PostgreSQL 15.x)
 Creating Schema History table "public"."flyway_schema_history"...
 Successfully baselined schema with version: 0
 
@@ -281,13 +257,7 @@ Migrating schema "public" to version "1 - initial schema"
 Successfully applied 1 migration to schema "public", now at version v1 (execution time 00:00.125s)
 ```
 
-**Repeat for Other 6 Services**: Run Flyway baseline and migrate for:
-- client-api
-- user-api
-- metric-builder-api
-- metric-tracker-api
-- task-builder-api
-- task-tracker-api
+**Note**: Additional services will have Flyway migrations applied in Phase 10 when deployed
 
 ---
 
@@ -295,7 +265,7 @@ Successfully applied 1 migration to schema "public", now at version v1 (executio
 
 ```bash
 # Connect to database via Auth Proxy
-psql -h 127.0.0.1 -p 5433 -U postgres -d auth_db_devtest
+psql -h 127.0.0.1 -p 5433 -U postgres -d client_api_db_devtest
 
 # Query Flyway history
 SELECT installed_rank, version, description, installed_on, success
@@ -341,11 +311,11 @@ Deployed AlloyDB infrastructure for devtest environment:
 - AlloyDB cluster (pcc-alloydb-cluster-devtest)
 - Primary instance (2 vCPUs, REGIONAL HA)
 - Read replica (2 vCPUs, READ_POOL)
-- 7 databases for microservices
+- 1 database for pcc-client-api microservice
 - PSC auto-created (connect via AlloyDB Auth Proxy)
 
 Phase 2 implementation complete. Cluster accessible via Auth Proxy.
-Flyway baseline complete for all 7 databases."
+Flyway baseline complete for client_api_db_devtest."
 
 git push origin main
 ```
@@ -358,7 +328,7 @@ git push origin main
 - [ ] AlloyDB cluster created (`pcc-alloydb-cluster-devtest`)
 - [ ] Primary instance created (2 vCPUs, REGIONAL)
 - [ ] Replica instance created (2 vCPUs, READ_POOL)
-- [ ] 7 databases created (auth, client, user, metric_builder, metric_tracker, task_builder, task_tracker)
+- [ ] 1 database created (client_api_db_devtest)
 - [ ] PSC auto-created (psc_enabled = true, PSC DNS name available)
 - [ ] Backup policy enabled (30-day retention)
 - [ ] PITR enabled (7-day window)
@@ -376,14 +346,14 @@ gcloud alloydb instances describe pcc-alloydb-instance-devtest-primary --cluster
 # Replica instance exists
 gcloud alloydb instances describe pcc-alloydb-instance-devtest-replica --cluster=pcc-alloydb-cluster-devtest --region=us-east4 --project=pcc-prj-app-devtest
 
-# 7 databases exist
+# 1 database exist
 gcloud alloydb databases list --cluster=pcc-alloydb-cluster-devtest --region=us-east4 --project=pcc-prj-app-devtest
 ```
 
 ### Connectivity Test Passed
 - [ ] Auth Proxy connected successfully
 - [ ] psql connection successful
-- [ ] Flyway baseline completed (all 7 databases)
+- [ ] Flyway baseline completed (all 1 database)
 
 ---
 
@@ -405,7 +375,7 @@ gcloud alloydb databases list --cluster=pcc-alloydb-cluster-devtest --region=us-
 
 ✅ **PSC Connectivity**: Auth Proxy successfully connects via PSC range
 
-✅ **Database Existence**: All 7 databases created
+✅ **Database Existence**: All 1 database created
 
 ✅ **Backup Policy**: Automated backups configured (30-day retention)
 
@@ -413,7 +383,7 @@ gcloud alloydb databases list --cluster=pcc-alloydb-cluster-devtest --region=us-
 
 ✅ **Multi-Zone HA**: Primary instance deployed with REGIONAL availability
 
-✅ **Flyway Baseline**: Schema history initialized for all databases
+✅ **Flyway Baseline**: Schema history initialized for the database
 
 ---
 
@@ -534,10 +504,10 @@ gcloud alloydb clusters list --region=us-east4 --project=pcc-prj-app-devtest  # 
 ## Deliverables
 
 - [ ] Terraform apply executed successfully
-- [ ] AlloyDB cluster created (10 resources)
+- [ ] AlloyDB cluster created (4 resources)
 - [ ] PSC connectivity tested (Auth Proxy working)
-- [ ] 7 databases created
-- [ ] Flyway baseline completed (all databases)
+- [ ] 1 database created
+- [ ] Flyway baseline completed (for the database)
 - [ ] Post-deployment validation passed
 - [ ] Terraform state updated
 - [ ] Git commit pushed to main

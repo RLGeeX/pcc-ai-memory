@@ -18,8 +18,9 @@ This plan outlines the 9 phases required to deploy the complete Apigee X pipelin
 
 **Database Strategy:**
 - Single AlloyDB cluster in pcc-app-shared-infra (us-east4)
-- 7 databases: auth_db_devtest, client_db_devtest, user_db_devtest, metric_builder_db_devtest, metric_tracker_db_devtest, task_builder_db_devtest, task_tracker_db_devtest
+- 1 database: client_api_db_devtest (for pcc-client-api)
 - Flyway schema migrations in CI/CD pipeline
+- Additional databases created in Phase 10 when remaining services are deployed
 
 **Container Strategy:**
 - Image naming: `pcc-app-{service}` (NO environment suffix)
@@ -103,20 +104,14 @@ This plan outlines the 9 phases required to deploy the complete Apigee X pipelin
 
 ---
 
-### Phase 2: AlloyDB Cluster + 7 Databases
+### Phase 2: AlloyDB Cluster + Database
 
-**Objective**: Deploy shared AlloyDB cluster with databases for all 7 microservices, including IAM and connectivity configuration
+**Objective**: Deploy shared AlloyDB cluster with database for pcc-client-api, including IAM and connectivity configuration
 
 **Scope:**
 - AlloyDB cluster in pcc-app-shared-infra (us-east4, high availability)
-- Create 7 databases:
-  - auth_db_devtest
-  - client_db_devtest
-  - user_db_devtest
-  - metric_builder_db_devtest
-  - metric_tracker_db_devtest
-  - task_builder_db_devtest
-  - task_tracker_db_devtest
+- Create 1 database:
+  - client_api_db_devtest (for pcc-client-api)
 
 **Database Configuration:**
 - PostgreSQL compatible (AlloyDB)
@@ -129,15 +124,9 @@ This plan outlines the 9 phases required to deploy the complete Apigee X pipelin
   - RTO/RPO targets: <5min RTO, <5min RPO for HA failover
 
 **Database Credentials & IAM:**
-- 7 secrets in Secret Manager (one per database):
-  - `alloydb-auth-db-devtest-creds`
-  - `alloydb-client-db-devtest-creds`
-  - `alloydb-user-db-devtest-creds`
-  - `alloydb-metric-builder-db-devtest-creds`
-  - `alloydb-metric-tracker-db-devtest-creds`
-  - `alloydb-task-builder-db-devtest-creds`
-  - `alloydb-task-tracker-db-devtest-creds`
-- PostgreSQL username/password stored in each secret
+- 1 secret in Secret Manager:
+  - `alloydb-client-api-db-devtest-creds`
+- PostgreSQL username/password stored in secret
 - Automatic rotation policy (30-90 days)
 - Rotation handling strategy:
   - Connection pooling: Npgsql connection pooling (built-in for .NET + PostgreSQL/AlloyDB)
@@ -207,7 +196,7 @@ This plan outlines the 9 phases required to deploy the complete Apigee X pipelin
 
 ### Phase 3: GKE Clusters (3 Total)
 
-**Objective**: Deploy Autopilot GKE clusters for devops and devtest workloads with IAM, Workload Identity, and namespace configuration
+**Objective**: Deploy Autopilot GKE clusters for devops and devtest workloads with cross-project IAM and namespace configuration
 
 **Clusters to Create:**
 
@@ -223,7 +212,7 @@ This plan outlines the 9 phases required to deploy the complete Apigee X pipelin
 
 3. **pcc-prj-app-devtest** (application workloads)
    - Subnet: Created in Phase 1
-   - Purpose: 7 microservices running in devtest
+   - Purpose: pcc-client-api service (single service deployment)
    - Autopilot mode
 
 **Cluster Configuration:**
@@ -232,84 +221,52 @@ This plan outlines the 9 phases required to deploy the complete Apigee X pipelin
 - Workload Identity enabled
 - Binary Authorization (future)
 
-**Workload Identity Bindings:**
-- Kubernetes SA → GCP SA mapping for each microservice (7 total):
-  - `pcc-auth-api-sa` → `pcc-auth-api@pcc-prj-app-devtest.iam.gserviceaccount.com`
-  - `pcc-client-api-sa` → `pcc-client-api@pcc-prj-app-devtest.iam.gserviceaccount.com`
-  - `pcc-user-api-sa` → `pcc-user-api@pcc-prj-app-devtest.iam.gserviceaccount.com`
-  - `pcc-metric-builder-api-sa` → `pcc-metric-builder-api@pcc-prj-app-devtest.iam.gserviceaccount.com`
-  - `pcc-metric-tracker-api-sa` → `pcc-metric-tracker-api@pcc-prj-app-devtest.iam.gserviceaccount.com`
-  - `pcc-task-builder-api-sa` → `pcc-task-builder-api@pcc-prj-app-devtest.iam.gserviceaccount.com`
-  - `pcc-task-tracker-api-sa` → `pcc-task-tracker-api@pcc-prj-app-devtest.iam.gserviceaccount.com`
-
 **Cross-Project IAM Bindings:**
 
 1. **Cloud Build SA → pcc-prj-devops-prod:**
    - Role: `roles/artifactregistry.writer`
    - Purpose: Push Docker images to Artifact Registry
 
-2. **Cloud Build SA → pcc-prj-app-devtest:**
-   - Role: `roles/container.developer`
-   - Purpose: Deploy container images to GKE
-
-3. **Cloud Build SA → pcc-app-shared-infra:**
+2. **Cloud Build SA → pcc-app-shared-infra:**
    - Role: `roles/secretmanager.secretAccessor`
-   - Purpose: Read database credentials during build/deploy
+   - Purpose: Read database credentials during build (for Flyway migrations)
 
-4. **ArgoCD SA → pcc-prj-app-devtest:**
+3. **ArgoCD SA → pcc-prj-app-devtest:**
    - Role: `roles/container.admin`
-   - Purpose: Manage Kubernetes deployments
-
-5. **GKE Service Accounts (7) → pcc-app-shared-infra:**
-   - Role: `roles/secretmanager.secretAccessor`
-   - Purpose: Read database credentials at runtime
+   - Purpose: Manage Kubernetes deployments via GitOps
 
 **Kubernetes Namespaces & RBAC:**
 
-1. **Namespaces (7 total):**
-   - `pcc-auth-api`
-   - `pcc-client-api`
-   - `pcc-user-api`
-   - `pcc-metric-builder-api`
-   - `pcc-metric-tracker-api`
-   - `pcc-task-builder-api`
-   - `pcc-task-tracker-api`
+1. **Namespace:**
+   - `pcc-client-api-devtest` (single namespace for this deployment)
 
 2. **RBAC Policies:**
-   - ArgoCD service account: `cluster-admin` in each namespace
-   - gcp-developers@pcconnect.ai: read-only access (view pods, logs)
-   - gcp-devops@pcconnect.ai: admin access (all operations)
-   - gcp-admins@pcconnect.ai: cluster-admin access
+   - ArgoCD service account: `cluster-admin` in pcc-client-api-devtest namespace
+   - gcp-developers@pcconnect.ai: `edit` role (can debug, exec, port-forward, scale)
+   - gcp-devops@pcconnect.ai: `admin` role (full namespace control)
+   - gcp-admins@pcconnect.ai: `cluster-admin` role (full cluster access)
 
-**Dependencies**: Phase 1 complete (app-devtest subnet exists), Phase 2 complete (service accounts need Secret Manager access)
+**Dependencies**: Phase 1 complete (app-devtest subnet exists), Phase 2 complete (AlloyDB cluster operational)
 
 **Deliverables:**
 - 3 GKE Autopilot clusters
-- 7 GCP service accounts (one per microservice)
-- 7 Workload Identity bindings
-- 5 cross-project IAM binding patterns (Apigee IAM deferred to Phase 7)
-- 7 Kubernetes namespaces
-- RBAC policies for 3 Google groups
-- Cluster access configured for CI/CD
+- 3 cross-project IAM binding patterns (Cloud Build → Artifact Registry, Cloud Build → Secret Manager, ArgoCD → GKE)
+- 1 Kubernetes namespace manifest (pcc-client-api-devtest) in ArgoCD repo (deployed via GitOps in Phase 4+)
+- RBAC policies for 3 Google groups (developers: edit, devops: admin, admins: cluster-admin)
+- Cluster access configured for ArgoCD
 - kubectl context configurations
 
 **Validation:**
 - `kubectl get nodes` on all 3 clusters
-- Workload Identity functional (test with sample pod)
 - **Cross-project IAM validation checklist**:
   - [ ] Cloud Build SA can write to Artifact Registry in pcc-prj-devops-prod
     - Test: Trigger build, verify image push succeeds
-  - [ ] Cloud Build SA can deploy to GKE in pcc-prj-app-devtest
-    - Test: Cloud Build can run `kubectl apply` commands
   - [ ] Cloud Build SA can read secrets from pcc-app-shared-infra
-    - Test: Cloud Build can fetch Secret Manager value during build
+    - Test: Cloud Build can fetch Secret Manager value during build (for Flyway migrations)
   - [ ] ArgoCD SA can manage deployments in pcc-prj-app-devtest
-    - Test: ArgoCD can sync application successfully
-  - [ ] GKE service accounts (7) can access Secret Manager in pcc-app-shared-infra
-    - Test: Deploy test pod with Workload Identity, verify Secret Manager read succeeds
-    - Verify all 7 service accounts have `roles/secretmanager.secretAccessor`
-- Namespaces created: `kubectl get namespaces`
-- RBAC validated: ArgoCD can deploy, developers can view
+    - Test: ArgoCD can sync application successfully (Phase 4+)
+- Namespace manifest (pcc-client-api-devtest) created in ArgoCD repo (deployed in Phase 4 when ArgoCD is operational)
+- RBAC validated: Developers can exec/port-forward (edit role), devops can admin, ArgoCD can deploy
 - Internal connectivity between clusters and AlloyDB
 
 **Size Estimate**: 450-550 lines of planning
@@ -388,25 +345,54 @@ This plan outlines the 9 phases required to deploy the complete Apigee X pipelin
 
 ---
 
-### Phase 6: First Service Deployment (End-to-End)
+### Phase 6: Service Infrastructure (pcc-client-api)
 
-**Objective**: Deploy one microservice to Kubernetes through the CI/CD pipeline (Apigee deployment deferred to Phase 7)
+**Objective**: Deploy service-specific infrastructure for pcc-client-api
 
-**Service Selection**: `pcc-auth-api` (recommended - foundational service)
+**Repository**: `infra/pcc-client-api-infra`
 
-**Scope:** Phase 6 focuses on Kubernetes deployment only. API proxy deployment to Apigee (deploy-apigee.sh) is deferred to Phase 7 when Apigee infrastructure is operational.
+**Scope:**
+- Create GCP service account: `pcc-client-api-devtest@pcc-prj-app-devtest.iam.gserviceaccount.com`
+- Create Workload Identity binding (Kubernetes SA → GCP SA)
+- Create IAM binding: service account → Secret Manager (read client_db_devtest credentials)
+- Terraform module calls from `core/pcc-tf-library`
+
+**Dependencies**: Phase 3 complete (GKE cluster exists), Phase 2 complete (AlloyDB with client_db_devtest exists)
+
+**Deliverables:**
+- pcc-client-api-devtest service account created
+- Workload Identity binding configured
+- IAM permissions for Secret Manager access
+- Service can authenticate to GCP services
+
+**Validation:**
+- Service account exists: `gcloud iam service-accounts list --project=pcc-prj-app-devtest`
+- Workload Identity binding active
+- IAM binding verified: service account has `roles/secretmanager.secretAccessor`
+
+**Size Estimate**: 200-300 lines of planning
+
+---
+
+### Phase 7: First Service Deployment (pcc-client-api)
+
+**Objective**: Deploy pcc-client-api to Kubernetes through the CI/CD pipeline (Apigee deployment deferred to Phase 8)
+
+**Service Selection**: `pcc-client-api` (client management service)
+
+**Scope:** Phase 7 focuses on Kubernetes deployment only. API proxy deployment to Apigee (deploy-apigee.sh) is deferred to Phase 8 when Apigee infrastructure is operational.
 
 **End-to-End Flow (Steps 1-8 only):**
 1. GitHub commit triggers Cloud Build
 2. build.sh: Compile .NET, run xUnit tests, build Docker image
-3. Tag image: `pcc-app-auth:v1.0.0.abc123`
+3. Tag image: `pcc-app-client:v1.0.0.abc123`
 4. Push to Artifact Registry (pcc-prj-devops-prod)
-5. generate-spec.sh: Extract OpenAPI spec from build, store in `infra/pcc-auth-api-infra/openapi.yaml`
-6. update-config.sh: Update `infra/pcc-auth-api-infra` Kubernetes manifests with new image tag
+5. generate-spec.sh: Extract OpenAPI spec from build, store in `infra/pcc-client-api-infra/openapi.yaml`
+6. update-config.sh: Update `infra/pcc-client-api-infra` Kubernetes manifests with new image tag
 7. wait-argocd.sh: ArgoCD detects change, syncs to pcc-prj-app-devtest
 8. Kubernetes deployment successful, service running on GKE
 
-**Step 9 Deferred:** deploy-apigee.sh (API proxy deployment) will be enabled in Phase 7 after Apigee nonprod org is operational.
+**Step 9 Deferred:** deploy-apigee.sh (API proxy deployment) will be enabled in Phase 8 after Apigee nonprod org is operational.
 
 **Validation Criteria:**
 - Service healthy in GKE
@@ -415,25 +401,25 @@ This plan outlines the 9 phases required to deploy the complete Apigee X pipelin
 - Logs visible in Cloud Logging
 - Can manually curl service from within cluster
 
-**Dependencies**: Phase 5 complete (pipeline library ready)
+**Dependencies**: Phase 5 complete (pipeline library ready), Phase 6 complete (service account and IAM configured)
 
 **Deliverables:**
-- pcc-auth-api deployed to devtest
+- pcc-client-api deployed to devtest
 - Cloud Build pipeline functional
 - ArgoCD GitOps sync working
-- Database schema initialized
+- Database schema initialized (client_db_devtest)
 
 **Validation:**
-- Service pods running: `kubectl get pods -n pcc-auth-api`
-- Health check: `curl http://pcc-auth-api.pcc-auth-api.svc.cluster.local/health`
-- Database tables created
+- Service pods running: `kubectl get pods -n pcc-client-api-devtest`
+- Health check: `curl http://pcc-client-api-devtest.pcc-client-api-devtest.svc.cluster.local/health`
+- Database tables created in client_db_devtest
 - ArgoCD shows sync success
 
 **Size Estimate**: 300-400 lines of planning
 
 ---
 
-### Phase 7: Apigee Nonprod Org + Devtest Environment
+### Phase 8: Apigee Nonprod Org + Devtest Environment
 
 **Objective**: Deploy Apigee X nonprod organization with devtest environment as API gateway, including API Product configuration
 
@@ -464,7 +450,7 @@ This plan outlines the 9 phases required to deploy the complete Apigee X pipelin
    - Internal hostname for GKE backend routing
 
 5. **API Proxy Deployment:**
-   - Deploy pcc-auth-api OpenAPI spec to Apigee
+   - Deploy pcc-client-api OpenAPI spec to Apigee
    - Create API proxy (auto-generated from spec)
    - Configure target backend (GKE service endpoint)
    - Test API proxy routing to GKE backend
@@ -537,41 +523,41 @@ This plan outlines the 9 phases required to deploy the complete Apigee X pipelin
      - Required permissions for PSC endpoint connectivity
      - Service attachment consumer authorization
 
-**Dependencies**: Phase 6 complete (pcc-auth-api running on GKE)
+**Dependencies**: Phase 7 complete (pcc-client-api running on GKE)
 
 **Deliverables:**
 - Apigee nonprod organization operational
 - Apigee runtime instance (SMALL) deployed
 - Devtest environment configured
 - PSC service attachment + PSC endpoint established (Apigee ↔ GKE)
-- GKE Ingress resources configured for all 7 services
+- GKE Ingress resource configured for pcc-client-api
 - Apigee Service Account IAM bindings configured
-- pcc-auth-api proxy deployed and routing to GKE via PSC
+- pcc-client-api proxy deployed and routing to GKE via PSC
 - API product `pcc-devtest-all-services` created
 - Descope JWT validation policy configured
 - Test developer app with API key
-- Internal API endpoint accessible (via Apigee, before external LB in Phase 8)
+- Internal API endpoint accessible (via Apigee, before external LB in Phase 9)
 
 **Validation:**
 - Apigee organization healthy
 - Runtime instance operational (SMALL size confirmed)
 - PSC service attachment created and active
 - PSC endpoint created with IP 10.24.200.10, connection status: ACCEPTED
-- GKE Ingress resources created for all services
+- GKE Ingress resource created for pcc-client-api
 - API proxy deployed
-- Internal API test: `curl http://<apigee-internal-endpoint>/devtest/auth/health`
-- Request routed: Apigee → PSC Endpoint (10.24.200.10) → PSC tunnel → GKE Ingress → Service
+- Internal API test: `curl http://<apigee-internal-endpoint>/devtest/client/health`
+- Request routed: Apigee → PSC Endpoint (10.24.200.10) → PSC tunnel → GKE Ingress → pcc-client-api
 - OpenAPI spec deployed correctly
 - API product visible in Apigee console
 - JWT validation policy working (test with valid/invalid tokens)
 - Test API key can access endpoints
-- Backend connectivity: Apigee can reach GKE service endpoints via PSC
+- Backend connectivity: Apigee can reach pcc-client-api via PSC
 
 **Size Estimate**: 450-550 lines of planning
 
 ---
 
-### Phase 8: External HTTPS Load Balancer & Connectivity
+### Phase 9: External HTTPS Load Balancer & Connectivity
 
 **Objective**: Configure external HTTPS connectivity to make Apigee devtest environment accessible from the internet
 
@@ -639,7 +625,7 @@ This plan outlines the 9 phases required to deploy the complete Apigee X pipelin
    - **Rate Limiting**: Defer for devtest (not needed for low-volume testing)
    - **Future Production**: Add rate limiting (1000 req/min per IP)
 
-**Dependencies**: Phase 7 complete (Apigee nonprod org and runtime instance operational)
+**Dependencies**: Phase 8 complete (Apigee nonprod org and runtime instance operational)
 
 **Deliverables:**
 - Network Endpoint Group (NEG) for Apigee instances
@@ -654,11 +640,11 @@ This plan outlines the 9 phases required to deploy the complete Apigee X pipelin
 - Load balancer provisioned and healthy
 - SSL certificate ACTIVE status (DNS validation complete)
 - DNS resolution: `nslookup api-devtest.pcconnect.ai` returns LB IP
-- External HTTPS test: `curl https://api-devtest.pcconnect.ai/devtest/auth/health` returns 200 OK
+- External HTTPS test: `curl https://api-devtest.pcconnect.ai/devtest/client/health` returns 200 OK
 - SSL certificate valid (not self-signed): `openssl s_client -connect api-devtest.pcconnect.ai:443`
-- End-to-end flow: External client → LB → Apigee → GKE → AlloyDB
+- End-to-end flow: External client → LB → Apigee → GKE → pcc-client-api → AlloyDB
 - Response time acceptable (<500ms for health check)
-- HTTP-to-HTTPS redirect working: `curl -L http://api-devtest.pcconnect.ai/devtest/auth/health`
+- HTTP-to-HTTPS redirect working: `curl -L http://api-devtest.pcconnect.ai/devtest/client/health`
 
 **Size Estimate**: 250-350 lines of planning
 
@@ -672,6 +658,51 @@ This plan outlines the 9 phases required to deploy the complete Apigee X pipelin
 
 ---
 
+### Phase 10: Remaining Services (Placeholder)
+
+**Objective**: Scale out infrastructure and deployments for remaining 6 microservices
+
+**Scope:**
+- Repeat Phase 6 & 7 pattern for each remaining service:
+  - pcc-auth-api
+  - pcc-user-api
+  - pcc-metric-builder-api
+  - pcc-metric-tracker-api
+  - pcc-task-builder-api
+  - pcc-task-tracker-api
+
+**Pattern for Each Service:**
+1. **Service Infrastructure** (repeat Phase 6 pattern):
+   - Deploy terraform from `infra/pcc-{service}-api-infra`
+   - Create service account
+   - Create Workload Identity binding
+   - Create IAM binding to Secret Manager
+
+2. **Service Deployment** (repeat Phase 7 pattern):
+   - CI/CD pipeline deployment
+   - ArgoCD GitOps sync
+   - Database migrations (Flyway)
+   - Health check validation
+
+3. **Apigee Integration** (extend Phase 8):
+   - Deploy OpenAPI spec to Apigee
+   - Create API proxy
+   - Add to existing environment group
+   - Update GKE Ingress with new path
+
+**Dependencies**: Phase 9 complete (pcc-client-api fully operational end-to-end)
+
+**Deliverables:**
+- All 7 microservices deployed to devtest
+- All services accessible via `https://api-devtest.pcconnect.ai/devtest/{service}/`
+- Complete API platform operational
+
+**Note**: This is a placeholder phase. Detailed planning will be done if/when required.
+
+**Size Estimate**: Use established patterns from Phases 6-8
+
+---
+
 ## Dependencies Summary
 
 ```
@@ -681,17 +712,21 @@ Phase 1 (Networking)
   ↓
 Phase 2 (AlloyDB + IAM + Credentials) ← also depends on Phase 0 (projects exist)
   ↓
-Phase 3 (GKE Clusters + Workload Identity + IAM) ← depends on Phase 1 & Phase 2
+Phase 3 (GKE Clusters + Cross-Project IAM) ← depends on Phase 1 & Phase 2
   ↓
 Phase 4 (ArgoCD)
   ↓
 Phase 5 (Pipeline Library)
   ↓
-Phase 6 (First Service)
+Phase 6 (Service Infrastructure - pcc-client-api) ← service account, Workload Identity, IAM
   ↓
-Phase 7 (Apigee Nonprod + Devtest + API Products)
+Phase 7 (First Service Deployment - pcc-client-api) ← CI/CD pipeline deployment
   ↓
-Phase 8 (External HTTPS Load Balancer)
+Phase 8 (Apigee Nonprod + Devtest + API Products) ← API gateway layer
+  ↓
+Phase 9 (External HTTPS Load Balancer) ← public internet connectivity
+  ↓
+Phase 10 (Remaining Services - Placeholder) ← scale out other 6 services
 ```
 
 ---
@@ -699,14 +734,14 @@ Phase 8 (External HTTPS Load Balancer)
 ## Success Criteria
 
 **End-to-End Validation:**
-1. GitHub commit to pcc-auth-api triggers Cloud Build
+1. GitHub commit to pcc-client-api triggers Cloud Build
 2. Pipeline builds, tests, and deploys Docker image
 3. ArgoCD syncs new image to pcc-prj-app-devtest
 4. Service running on GKE, connected to AlloyDB via Secret Manager credentials
 5. OpenAPI spec deployed to Apigee devtest environment
 6. External API call from internet routes through full stack:
-   - `https://api-devtest.pcconnect.ai/devtest/auth/health`
-   - External HTTPS LB → Apigee → GKE → AlloyDB
+   - `https://api-devtest.pcconnect.ai/devtest/client/health`
+   - External HTTPS LB → Apigee → GKE → pcc-client-api → AlloyDB (client_db_devtest)
 7. Response returns successfully with expected data
 8. JWT authentication validates correctly through Apigee
 9. Developer can connect to AlloyDB locally via Auth Proxy
@@ -757,7 +792,7 @@ Phase 8 (External HTTPS Load Balancer)
 - 1-2 sessions per phase
 - Validation gates between phases
 
-**Estimated Duration**: 2-3 weeks for all 9 phases (Phases 0-8)
+**Estimated Duration**: 2-3 weeks for Phases 0-9 (Phase 10 is future work)
 
 ---
 

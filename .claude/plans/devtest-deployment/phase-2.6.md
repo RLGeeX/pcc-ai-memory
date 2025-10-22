@@ -31,8 +31,8 @@ Design IAM bindings for AlloyDB cluster access, Secret Manager access, and devel
 - Developer tools (Auth Proxy)
 
 **Principals**:
-- GKE service accounts (7 microservices) - Workload Identity
-- Developer group (`pcc-developers@portcon.com`)
+- GKE service accounts (1 microservice: pcc-client-api) - Workload Identity
+- Developer group (`gcp-developers@pcconnect.ai`)
 - CI/CD service account (Cloud Build)
 
 **Principle**: Least privilege (grant minimum required permissions)
@@ -43,7 +43,7 @@ Design IAM bindings for AlloyDB cluster access, Secret Manager access, and devel
 
 ### 1. Developer Group - Auth Proxy Access
 
-**Principal**: `group:pcc-developers@portcon.com`
+**Principal**: `group:gcp-developers@pcconnect.ai`
 **Role**: `roles/alloydb.client`
 **Project**: `pcc-prj-app-devtest`
 
@@ -54,7 +54,7 @@ Design IAM bindings for AlloyDB cluster access, Secret Manager access, and devel
 resource "google_project_iam_member" "alloydb_client_devs" {
   project = "pcc-prj-app-devtest"
   role    = "roles/alloydb.client"
-  member  = "group:pcc-developers@portcon.com"
+  member  = "group:gcp-developers@pcconnect.ai"
 }
 ```
 
@@ -97,14 +97,12 @@ resource "google_project_iam_member" "alloydb_client_cicd" {
 
 **Terraform** (optional):
 ```hcl
-# Example for auth-api
-resource "google_project_iam_member" "alloydb_client_auth_api" {
+# Example for client-api
+resource "google_project_iam_member" "alloydb_client_client_api" {
   project = "pcc-prj-app-devtest"
   role    = "roles/alloydb.client"
-  member  = "serviceAccount:pcc-auth-api-sa@pcc-prj-app-devtest.iam.gserviceaccount.com"
+  member  = "serviceAccount:pcc-client-api-sa@pcc-prj-app-devtest.iam.gserviceaccount.com"
 }
-
-# Repeat for other 6 services...
 ```
 
 **Decision**: Skip for devtest (use credentials only), add for production
@@ -119,23 +117,17 @@ resource "google_project_iam_member" "alloydb_client_auth_api" {
 
 | GKE Service Account | Secret | Role |
 |---------------------|--------|------|
-| `pcc-auth-api-sa` | `auth-db-credentials-devtest` | `roles/secretmanager.secretAccessor` |
-| `pcc-client-api-sa` | `client-db-credentials-devtest` | `roles/secretmanager.secretAccessor` |
-| `pcc-user-api-sa` | `user-db-credentials-devtest` | `roles/secretmanager.secretAccessor` |
-| `pcc-metric-builder-api-sa` | `metric-builder-db-credentials-devtest` | `roles/secretmanager.secretAccessor` |
-| `pcc-metric-tracker-api-sa` | `metric-tracker-db-credentials-devtest` | `roles/secretmanager.secretAccessor` |
-| `pcc-task-builder-api-sa` | `task-builder-db-credentials-devtest` | `roles/secretmanager.secretAccessor` |
-| `pcc-task-tracker-api-sa` | `task-tracker-db-credentials-devtest` | `roles/secretmanager.secretAccessor` |
+| `pcc-client-api-sa` | `client-api-db-credentials-devtest` | `roles/secretmanager.secretAccessor` |
+
+**Note**: Additional service account bindings created in Phase 10 when remaining services are deployed
 
 **Terraform** (in secret-manager-database module):
 ```hcl
-resource "google_secret_manager_secret_iam_member" "auth_api_accessor" {
-  secret_id = google_secret_manager_secret.auth_db_credentials.id
+resource "google_secret_manager_secret_iam_member" "client_api_accessor" {
+  secret_id = google_secret_manager_secret.client_api_db_credentials.id
   role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:pcc-auth-api-sa@pcc-prj-app-devtest.iam.gserviceaccount.com"
+  member    = "serviceAccount:pcc-client-api-sa@pcc-prj-app-devtest.iam.gserviceaccount.com"
 }
-
-# Repeat for other 6 services...
 ```
 
 **Permissions Granted**:
@@ -145,31 +137,28 @@ resource "google_secret_manager_secret_iam_member" "auth_api_accessor" {
 
 ### 2. Developer Group - Secret Access
 
-**Principal**: `group:pcc-developers@portcon.com`
+**Principal**: `group:gcp-developers@pcconnect.ai`
 **Role**: `roles/secretmanager.secretAccessor`
-**Secrets**: All 9 secrets (7 service + admin + flyway)
+**Secrets**: All 3 secrets (1 service (pcc-client-api) + admin + flyway)
 
 **Purpose**: Developers need credentials for local testing with Auth Proxy
 
 **Terraform**:
 ```hcl
-# Grant developer access to all secrets
-resource "google_secret_manager_secret_iam_member" "devs_accessor" {
-  for_each = toset([
-    google_secret_manager_secret.auth_db_credentials.id,
-    google_secret_manager_secret.client_db_credentials.id,
-    google_secret_manager_secret.user_db_credentials.id,
-    google_secret_manager_secret.metric_builder_db_credentials.id,
-    google_secret_manager_secret.metric_tracker_db_credentials.id,
-    google_secret_manager_secret.task_builder_db_credentials.id,
-    google_secret_manager_secret.task_tracker_db_credentials.id,
-    google_secret_manager_secret.admin_credentials.id,
-    google_secret_manager_secret.flyway_credentials.id
-  ])
-
-  secret_id = each.value
+# Grant developer access to SERVICE SECRETS ONLY (not admin or Flyway)
+resource "google_secret_manager_secret_iam_member" "devs_accessor_client_api" {
+  secret_id = google_secret_manager_secret.client_api_db_credentials.id  # Only service secret
   role      = "roles/secretmanager.secretAccessor"
-  member    = "group:pcc-developers@portcon.com"
+  member    = "group:gcp-developers@pcconnect.ai"
+}
+
+# Note: Additional service secret bindings will be added in Phase 10 when remaining services are deployed
+
+# Admin credentials - DevOps access only
+resource "google_secret_manager_secret_iam_member" "devops_admin_accessor" {
+  secret_id = google_secret_manager_secret.admin_credentials.id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "group:gcp-devops@pcconnect.ai"
 }
 ```
 
@@ -202,31 +191,46 @@ resource "google_secret_manager_secret_iam_member" "cicd_flyway_accessor" {
 
 ### 1. Admin User - Secret Manager Admin
 
-**Principal**: `group:pcc-admins@portcon.com`
+**Principal**: `group:gcp-devops@pcconnect.ai`
 **Role**: `roles/secretmanager.admin`
-**Project**: `pcc-prj-app-devtest`
+**Scope**: AlloyDB secrets only (resource-level, not project-level)
 
 **Purpose**: Rotate passwords, update secrets, manage secret lifecycle
 
 **Terraform**:
 ```hcl
-resource "google_project_iam_member" "secret_admin" {
-  project = "pcc-prj-app-devtest"
-  role    = "roles/secretmanager.admin"
-  member  = "group:pcc-admins@portcon.com"
+# Resource-level admin bindings for AlloyDB secrets only
+resource "google_secret_manager_secret_iam_member" "admin_client_api_creds" {
+  secret_id = google_secret_manager_secret.client_api_db_credentials.id
+  role      = "roles/secretmanager.admin"
+  member    = "group:gcp-devops@pcconnect.ai"
+}
+
+resource "google_secret_manager_secret_iam_member" "admin_admin_creds" {
+  secret_id = google_secret_manager_secret.admin_credentials.id
+  role      = "roles/secretmanager.admin"
+  member    = "group:gcp-devops@pcconnect.ai"
+}
+
+resource "google_secret_manager_secret_iam_member" "admin_flyway_creds" {
+  secret_id = google_secret_manager_secret.flyway_credentials.id
+  role      = "roles/secretmanager.admin"
+  member    = "group:gcp-devops@pcconnect.ai"
 }
 ```
 
-**Permissions Granted**:
-- Create, update, delete secrets
-- Manage secret versions
-- Configure rotation
+**Permissions Granted** (resource-level):
+- Create, update, delete secret versions for AlloyDB secrets
+- Manage secret versions for AlloyDB secrets
+- Configure rotation for AlloyDB secrets
+
+**Security**: Resource-level bindings prevent access to non-AlloyDB secrets in project
 
 ---
 
 ### 2. Admin User - AlloyDB Admin
 
-**Principal**: `group:pcc-admins@portcon.com`
+**Principal**: `group:gcp-devops@pcconnect.ai`
 **Role**: `roles/alloydb.admin`
 **Project**: `pcc-prj-app-devtest`
 
@@ -237,7 +241,7 @@ resource "google_project_iam_member" "secret_admin" {
 resource "google_project_iam_member" "alloydb_admin" {
   project = "pcc-prj-app-devtest"
   role    = "roles/alloydb.admin"
-  member  = "group:pcc-admins@portcon.com"
+  member  = "group:gcp-devops@pcconnect.ai"
 }
 ```
 
@@ -249,26 +253,94 @@ resource "google_project_iam_member" "alloydb_admin" {
 
 ---
 
+## Audit Logging Configuration
+
+### Cloud Audit Logs for Secret Manager and AlloyDB
+
+**Requirement**: Enable Cloud Audit Logs for all IAM operations on secrets and AlloyDB resources (Phase 2.5 reference: line 400)
+
+**Log Types**:
+- **DATA_READ**: Log secret access and AlloyDB queries
+- **DATA_WRITE**: Log secret modifications and AlloyDB writes
+- **ADMIN_READ**: Log administrative read operations
+
+**Retention**: 90 days (matches Phase 2.5 requirement)
+
+**Terraform**:
+```hcl
+# Enable audit logging for Secret Manager
+resource "google_project_iam_audit_config" "secret_manager_audit" {
+  project = "pcc-prj-app-devtest"
+  service = "secretmanager.googleapis.com"
+
+  audit_log_config {
+    log_type = "DATA_READ"  # Log secret access
+  }
+
+  audit_log_config {
+    log_type = "DATA_WRITE"  # Log secret modifications
+  }
+
+  audit_log_config {
+    log_type = "ADMIN_READ"  # Log admin operations
+  }
+}
+
+# Enable audit logging for AlloyDB
+resource "google_project_iam_audit_config" "alloydb_audit" {
+  project = "pcc-prj-app-devtest"
+  service = "alloydb.googleapis.com"
+
+  audit_log_config {
+    log_type = "ADMIN_READ"
+  }
+
+  audit_log_config {
+    log_type = "DATA_READ"
+  }
+
+  audit_log_config {
+    log_type = "DATA_WRITE"
+  }
+}
+
+# Configure log retention in Cloud Logging
+resource "google_logging_project_bucket_config" "audit_logs" {
+  project        = "pcc-prj-app-devtest"
+  location       = "global"
+  retention_days = 90
+  bucket_id      = "_Default"
+}
+```
+
+**Security Benefits**:
+- Track who accessed secrets and when
+- Detect unauthorized access attempts
+- Support forensic investigations
+- Compliance with audit requirements
+
+---
+
 ## Workload Identity Setup
 
 ### GKE Service Account → Google Service Account Binding
 
 **Pattern**: Link Kubernetes service account to Google Cloud service account
 
-**Example** (auth-api):
+**Example** (client-api):
 ```hcl
 # Create Google service account
-resource "google_service_account" "auth_api" {
-  account_id   = "pcc-auth-api-sa"
-  display_name = "Service account for pcc-auth-api"
+resource "google_service_account" "client_api" {
+  account_id   = "pcc-client-api-sa"
+  display_name = "Service account for pcc-client-api"
   project      = "pcc-prj-app-devtest"
 }
 
 # Bind Kubernetes service account to Google service account
-resource "google_service_account_iam_member" "auth_api_workload_identity" {
-  service_account_id = google_service_account.auth_api.name
+resource "google_service_account_iam_member" "client_api_workload_identity" {
+  service_account_id = google_service_account.client_api.name
   role               = "roles/iam.workloadIdentityUser"
-  member             = "serviceAccount:pcc-prj-app-devtest.svc.id.goog[default/pcc-auth-api-sa]"
+  member             = "serviceAccount:pcc-prj-app-devtest.svc.id.goog[devtest/pcc-client-api-sa]"  # devtest namespace
 }
 ```
 
@@ -277,10 +349,10 @@ resource "google_service_account_iam_member" "auth_api_workload_identity" {
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: pcc-auth-api-sa
-  namespace: default
+  name: pcc-client-api-sa
+  namespace: devtest  # Environment-specific namespace
   annotations:
-    iam.gke.io/gcp-service-account: pcc-auth-api-sa@pcc-prj-app-devtest.iam.gserviceaccount.com
+    iam.gke.io/gcp-service-account: pcc-client-api-sa@pcc-prj-app-devtest.iam.gserviceaccount.com
 ```
 
 **Note**: Workload Identity setup is Phase 3 (Kubernetes deployment)
@@ -293,9 +365,9 @@ metadata:
 
 | Principal | Role | Purpose |
 |-----------|------|---------|
-| `pcc-developers@portcon.com` | `alloydb.client` | Auth Proxy access |
+| `gcp-developers@pcconnect.ai` | `alloydb.client` | Auth Proxy access |
 | `pcc-cloudbuild-sa` | `alloydb.client` | Flyway migrations |
-| `pcc-admins@portcon.com` | `alloydb.admin` | Cluster management |
+| `gcp-devops@pcconnect.ai` | `alloydb.admin` | Cluster management |
 
 ---
 
@@ -303,16 +375,13 @@ metadata:
 
 | Principal | Role | Secrets | Purpose |
 |-----------|------|---------|---------|
-| `pcc-auth-api-sa` | `secretAccessor` | `auth-db-credentials-devtest` | App access |
-| `pcc-client-api-sa` | `secretAccessor` | `client-db-credentials-devtest` | App access |
-| `pcc-user-api-sa` | `secretAccessor` | `user-db-credentials-devtest` | App access |
-| `pcc-metric-builder-api-sa` | `secretAccessor` | `metric-builder-db-credentials-devtest` | App access |
-| `pcc-metric-tracker-api-sa` | `secretAccessor` | `metric-tracker-db-credentials-devtest` | App access |
-| `pcc-task-builder-api-sa` | `secretAccessor` | `task-builder-db-credentials-devtest` | App access |
-| `pcc-task-tracker-api-sa` | `secretAccessor` | `task-tracker-db-credentials-devtest` | App access |
-| `pcc-developers@portcon.com` | `secretAccessor` | All 9 secrets | Local testing |
+| `pcc-client-api-sa` | `secretAccessor` | `client-api-db-credentials-devtest` | App access |
+| `gcp-developers@pcconnect.ai` | `secretAccessor` | `client-api-db-credentials-devtest` ONLY | Local testing (service secrets only) |
 | `pcc-cloudbuild-sa` | `secretAccessor` | `alloydb-flyway-credentials-devtest` | Flyway migrations |
-| `pcc-admins@portcon.com` | `secretmanager.admin` | All secrets | Secret management |
+| `gcp-devops@pcconnect.ai` | `secretAccessor` | `alloydb-admin-credentials-devtest` | Admin operations |
+| `gcp-devops@pcconnect.ai` | `secretmanager.admin` | AlloyDB secrets (resource-level) | Secret management |
+
+**Note**: Additional service account bindings created in Phase 10 when remaining services are deployed
 
 ---
 
@@ -331,27 +400,48 @@ module "alloydb_secrets_devtest" {
 
   # ... other parameters from Phase 2.5 ...
 
-  # IAM bindings for Workload Identity
+  # Granular IAM bindings per secret (CORRECTED from simple group-based approach)
+  secret_iam_bindings = {
+    # Service secret bindings
+    "client-api-db-credentials-devtest" = {
+      "roles/secretmanager.secretAccessor" = [
+        "serviceAccount:pcc-client-api-sa@pcc-prj-app-devtest.iam.gserviceaccount.com",
+        "group:gcp-developers@pcconnect.ai"  # Developers get service secrets ONLY
+      ]
+      "roles/secretmanager.admin" = [
+        "group:gcp-devops@pcconnect.ai"
+      ]
+    }
+
+    # Admin secret bindings
+    "alloydb-admin-credentials-devtest" = {
+      "roles/secretmanager.secretAccessor" = [
+        "group:gcp-devops@pcconnect.ai"  # DevOps only, NOT developers
+      ]
+      "roles/secretmanager.admin" = [
+        "group:gcp-devops@pcconnect.ai"
+      ]
+    }
+
+    # Flyway secret bindings
+    "alloydb-flyway-credentials-devtest" = {
+      "roles/secretmanager.secretAccessor" = [
+        "serviceAccount:pcc-cloudbuild-sa@pcc-prj-app-devtest.iam.gserviceaccount.com"  # CI/CD only
+      ]
+      "roles/secretmanager.admin" = [
+        "group:gcp-devops@pcconnect.ai"
+      ]
+    }
+  }
+
+  # Workload Identity bindings
   workload_identity_bindings = [
     {
-      secret_name         = "auth-db-credentials-devtest"
-      service_account     = "pcc-auth-api-sa@pcc-prj-app-devtest.iam.gserviceaccount.com"
-    },
-    {
-      secret_name         = "client-db-credentials-devtest"
-      service_account     = "pcc-client-api-sa@pcc-prj-app-devtest.iam.gserviceaccount.com"
-    },
-    # ... other 5 services ...
+      secret_name     = "client-api-db-credentials-devtest"
+      service_account = "pcc-client-api-sa@pcc-prj-app-devtest.iam.gserviceaccount.com"
+      k8s_namespace   = "devtest"  # Environment-specific namespace
+    }
   ]
-
-  # IAM binding for developer group
-  developer_group = "pcc-developers@portcon.com"
-
-  # IAM binding for CI/CD
-  cicd_service_account = "pcc-cloudbuild-sa@pcc-prj-app-devtest.iam.gserviceaccount.com"
-
-  # IAM binding for admin group
-  admin_group = "pcc-admins@portcon.com"
 }
 ```
 
@@ -366,7 +456,7 @@ module "alloydb_secrets_devtest" {
    - [x] Decide on GKE service account bindings (optional for devtest)
 
 2. **Secret Manager IAM**:
-   - [x] Design Workload Identity bindings (7 services → 7 secrets)
+   - [x] Design Workload Identity bindings (1 service (pcc-client-api) → 1 secret)
    - [x] Design developer group binding (all secrets)
    - [x] Design CI/CD binding (Flyway secret only)
    - [x] Design admin group binding (secret management)
@@ -386,7 +476,7 @@ module "alloydb_secrets_devtest" {
 ## Dependencies
 
 **Upstream**:
-- Phase 2.5: Secret Manager design (9 secrets)
+- Phase 2.5: Secret Manager design (3 secrets)
 - Phase 2.3: AlloyDB cluster (project and resources)
 
 **Downstream**:
@@ -399,7 +489,7 @@ module "alloydb_secrets_devtest" {
 ## Validation Criteria
 
 - [x] AlloyDB IAM bindings designed (3 principals)
-- [x] Secret Manager IAM bindings designed (7 services + developers + CI/CD + admins)
+- [x] Secret Manager IAM bindings designed (1 service (pcc-client-api) + developers + CI/CD + admins)
 - [x] Workload Identity pattern documented
 - [x] Least privilege principle applied (minimal permissions)
 - [x] Terraform module enhanced with IAM bindings
@@ -411,7 +501,7 @@ module "alloydb_secrets_devtest" {
 
 - [x] IAM binding design document (this file)
 - [x] AlloyDB IAM bindings (3 principals)
-- [x] Secret Manager IAM bindings (7 services + 3 groups)
+- [x] Secret Manager IAM bindings (1 service (pcc-client-api) + 3 groups)
 - [x] Workload Identity binding pattern
 - [x] Terraform module enhancement plan
 
@@ -445,7 +535,7 @@ module "alloydb_secrets_devtest" {
 
 **Planning + Configuration**: 20-25 minutes
 - 5 min: Design AlloyDB IAM bindings (3 principals)
-- 10 min: Design Secret Manager IAM bindings (7 services + 3 groups)
+- 10 min: Design Secret Manager IAM bindings (1 service (pcc-client-api) + 3 groups)
 - 5 min: Document Workload Identity pattern
 - 5 min: Enhance terraform module with IAM configuration
 

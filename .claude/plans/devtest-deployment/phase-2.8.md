@@ -218,25 +218,14 @@ Terraform will perform the following actions:
         }
     }
 
-  # module.alloydb_cluster_devtest.google_alloydb_database.databases["auth_db_devtest"] will be created
-  # ... (repeat for other 6 databases) ...
-
-Plan: 10 to add, 0 to change, 0 to destroy.
+Plan: 3 to add, 0 to change, 0 to destroy.
 
 Changes to Outputs:
   + alloydb_devtest_cluster_id              = "pcc-alloydb-cluster-devtest"
   + alloydb_devtest_primary_ip              = (known after apply)
   + alloydb_devtest_primary_connection_string = (sensitive value)
   + alloydb_devtest_replica_ip              = (known after apply)
-  + alloydb_devtest_databases               = [
-      + "auth_db_devtest",
-      + "client_db_devtest",
-      + "user_db_devtest",
-      + "metric_builder_db_devtest",
-      + "metric_tracker_db_devtest",
-      + "task_builder_db_devtest",
-      + "task_tracker_db_devtest"
-    ]
+  + alloydb_devtest_psc_dns_name            = (known after apply)
 
 ------------------------------------------------------------------------
 
@@ -244,12 +233,14 @@ Saved the plan to: alloydb-devtest.tfplan
 ```
 
 **Resource Count**:
-- 1 AlloyDB cluster
+- 1 AlloyDB cluster (auto-creates default `postgres` database)
 - 2 AlloyDB instances (primary + replica)
-- 7 AlloyDB databases
-- **Total**: 10 resources
+- **Total**: 3 resources
 
-**Note**: PSC endpoints are auto-created by AlloyDB (not counted as Terraform resources)
+**Note**:
+- PSC endpoints are auto-created by AlloyDB (not counted as Terraform resources)
+- Database `client_api_db_devtest` will be created by Flyway (Phase 2.7), not Terraform
+- No `google_alloydb_database` resource exists in Terraform Google provider
 
 ---
 
@@ -263,8 +254,8 @@ Saved the plan to: alloydb-devtest.tfplan
 - [ ] PITR enabled (7-day window)
 - [ ] Primary instance: 2 vCPUs, REGIONAL availability
 - [ ] Replica instance: 2 vCPUs, READ_POOL type
-- [ ] 7 databases created (correct names)
 - [ ] Outputs defined (cluster_id, IPs, connection_string, PSC DNS name)
+- [ ] Verify default `postgres` database will be auto-created (databases created by Flyway, not Terraform)
 
 ---
 
@@ -309,7 +300,7 @@ gcloud compute networks describe pcc-vpc-nonprod \
 - [ ] **Caller Formatting**: `terraform fmt -check` passes
 - [ ] **Caller Validation**: `terraform validate` passes
 - [ ] **Terraform Plan**: Generated successfully (alloydb-devtest.tfplan)
-- [ ] **Resource Count**: 10 resources (1 cluster, 2 instances, 7 databases)
+- [ ] **Resource Count**: 4 resources (1 cluster, 2 instances, 1 database)
 - [ ] **Prerequisites**: VPC, project all exist
 - [ ] **Configuration**: Cluster config matches Phase 2.1 design
 
@@ -389,7 +380,7 @@ gcloud compute networks describe pcc-vpc-nonprod \
 ## Next Steps After Validation
 
 **Phase 2.9 Preparation**:
-- [ ] Review terraform plan output (10 resources)
+- [ ] Review terraform plan output (4 resources)
 - [ ] Confirm cost estimate acceptable (~$550/month)
 - [ ] Verify prerequisites (VPC, project)
 - [ ] Prepare for WARP deployment (Phase 2.9)

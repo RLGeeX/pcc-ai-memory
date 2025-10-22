@@ -60,7 +60,7 @@ AlloyDB Primary Instance (Google-managed VPC)
 1. **gcloud CLI**: Latest version installed
 2. **Auth Proxy Binary**: `alloydb-auth-proxy` downloaded
 3. **IAM Permission**: `roles/alloydb.client` (Phase 2.6)
-4. **Database Credentials**: Retrieved from Secret Manager (Phase 2.5)
+4. **Database Credentials**: Service secret only (client-api-db-credentials-devtest) from Secret Manager (Phase 2.5). NOT admin or Flyway credentials (least privilege per Phase 2.6).
 
 **Installation** (macOS/Linux):
 ```bash
@@ -127,30 +127,33 @@ alloydb-auth-proxy \
 **Connection Details**:
 - **Host**: `127.0.0.1` (local proxy)
 - **Port**: `5433` (proxy listening port)
-- **Database**: `{db_name}` (e.g., `auth_db_devtest`)
-- **Username**: From Secret Manager (e.g., `auth_api_user`)
+- **Database**: `{db_name}` (e.g., `client_api_db_devtest`)
+- **Username**: From Secret Manager (e.g., `client_api_user`)
 - **Password**: From Secret Manager
+- **Encryption**: SSL/TLS required (enforced in connection string from Secret Manager per Phase 2.5)
 
 **Retrieve Credentials from Secret Manager**:
 ```bash
-# Get auth_api_user credentials
+# Get client_api_user credentials
 gcloud secrets versions access latest \
-  --secret=auth-db-credentials-devtest \
+  --secret=client-api-db-credentials-devtest \
   --project=pcc-prj-app-devtest \
   --format=json | jq -r '.username, .password'
 ```
 
-**psql Connection**:
+**psql Connection** (with SSL enforcement per Phase 2.5):
 ```bash
-psql -h 127.0.0.1 -p 5433 -U auth_api_user -d auth_db_devtest
+psql "host=127.0.0.1 port=5433 dbname=client_api_db_devtest user=client_api_user sslmode=require"
 ```
 
 **DBeaver/DataGrip Connection**:
 - Host: `127.0.0.1`
 - Port: `5433`
-- Database: `auth_db_devtest`
-- Username: `auth_api_user`
+- Database: `client_api_db_devtest`
+- Username: `client_api_user`
 - Password: `<from Secret Manager>`
+- SSL Mode: require (enable in Advanced/SSL settings)
+- SSL Factory: org.postgresql.ssl.DefaultJavaSSLFactory
 
 ---
 
@@ -171,6 +174,8 @@ alias alloydb-devtest='alloydb-auth-proxy "projects/pcc-prj-app-devtest/location
 # Usage
 alloydb-devtest  # Starts proxy on port 5433
 ```
+
+**Credential Rotation Note**: Credentials rotate every 90 days (Phase 2.5). If connection fails, re-fetch credentials from Secret Manager using the gcloud command above.
 
 ---
 
@@ -211,10 +216,12 @@ gcloud auth application-default login
 
 ### Overview
 
-**Purpose**: Manage AlloyDB schema migrations (tables, indexes, constraints)
+**Purpose**: Create AlloyDB database AND manage schema migrations (tables, indexes, constraints)
 **Execution**: CI/CD pipeline (Cloud Build), not terraform
 **Version Control**: Flyway SQL migrations in `src/{service}-api/migrations/`
 **Authentication**: Flyway user credentials from Secret Manager (Phase 2.5)
+**Kubernetes Namespace**: devtest (Workload Identity binding from Phase 2.6)
+**Important**: V1 migration creates the database itself (AlloyDB only has default `postgres` DB after Terraform)
 
 ---
 
@@ -249,13 +256,13 @@ Update flyway_schema_history table
 **Location**: `src/{service}-api/migrations/`
 **Naming Convention**: `V{version}__{description}.sql`
 
-**Example** (auth-api):
+**Example** (client-api):
 ```
-src/pcc-auth-api/migrations/
-├── V1__initial_schema.sql
-├── V2__add_sessions_table.sql
-├── V3__add_refresh_tokens.sql
-└── V4__add_oauth_providers.sql
+src/pcc-client-api/migrations/
+├── V1__create_database_and_initial_schema.sql   (Creates DB + initial tables)
+├── V2__add_indexes_and_constraints.sql
+├── V3__add_audit_columns.sql
+└── V4__add_additional_tables.sql
 ```
 
 ---
@@ -264,12 +271,13 @@ src/pcc-auth-api/migrations/
 
 **Location**: `src/{service}-api/flyway.conf`
 
-**Example** (auth-api):
+**Example** (client-api):
 ```properties
-# Flyway configuration for auth-api devtest
+# Flyway configuration for client-api devtest
 
 # Connection URL (via Auth Proxy in CI/CD)
-flyway.url=jdbc:postgresql://127.0.0.1:5433/auth_db_devtest
+# SSL enforced per Phase 2.5 security requirements
+flyway.url=jdbc:postgresql://127.0.0.1:5433/client_api_db_devtest?ssl=true&sslmode=require&sslrootcert=verify-full
 
 # Credentials from environment variables (Cloud Build)
 flyway.user=${DB_USER}
@@ -285,6 +293,10 @@ flyway.validateOnMigrate=true
 # Retry settings (for transient failures)
 flyway.connectRetries=3
 flyway.connectRetriesInterval=10
+
+# Security: Minimize logging verbosity to prevent credential exposure
+flyway.outputType=json
+flyway.logLevel=WARN
 ```
 
 **Environment Variables** (Cloud Build):
@@ -297,9 +309,9 @@ flyway.connectRetriesInterval=10
 
 **Location**: `src/{service}-api/cloudbuild-flyway.yaml`
 
-**Example** (auth-api):
+**Example** (client-api):
 ```yaml
-# Cloud Build pipeline for Flyway migrations (auth-api devtest)
+# Cloud Build pipeline for Flyway migrations (client-api devtest)
 
 steps:
   # Step 1: Download AlloyDB Auth Proxy
@@ -328,25 +340,14 @@ steps:
         sleep 5
     id: 'start-auth-proxy'
 
-  # Step 4: Retrieve Flyway credentials from Secret Manager
-  - name: 'gcr.io/cloud-builders/gcloud'
+  # Step 4: Run Flyway migrate with credentials from Secret Manager
+  - name: 'flyway/flyway:9.22'
     entrypoint: 'bash'
     args:
       - '-c'
       - |
         export DB_USER=$(gcloud secrets versions access latest --secret=alloydb-flyway-credentials-devtest --project=pcc-prj-app-devtest --format=json | jq -r '.username')
         export DB_PASSWORD=$(gcloud secrets versions access latest --secret=alloydb-flyway-credentials-devtest --project=pcc-prj-app-devtest --format=json | jq -r '.password')
-        echo "DB_USER=$DB_USER" >> /workspace/flyway-env
-        echo "DB_PASSWORD=$DB_PASSWORD" >> /workspace/flyway-env
-    id: 'get-flyway-credentials'
-
-  # Step 5: Run Flyway migrate
-  - name: 'flyway/flyway:9.22'
-    entrypoint: 'bash'
-    args:
-      - '-c'
-      - |
-        source /workspace/flyway-env
         flyway -configFiles=/workspace/flyway.conf migrate
     id: 'flyway-migrate'
 
@@ -384,12 +385,18 @@ flyway -configFiles=flyway.conf migrate
 
 ### Flyway Migration Example
 
-**File**: `src/pcc-auth-api/migrations/V1__initial_schema.sql`
+**File**: `src/pcc-client-api/migrations/V1__create_database_and_initial_schema.sql`
 
 ```sql
--- V1: Initial schema for auth_db_devtest
+-- V1: Create database and initial schema for pcc-client-api
 -- Author: PCC Team
 -- Date: 2025-10-20
+
+-- Create the database (AlloyDB only has default 'postgres' DB after Terraform deployment)
+CREATE DATABASE client_api_db_devtest;
+
+-- Connect to the new database
+\c client_api_db_devtest
 
 -- Users table (local auth fallback)
 CREATE TABLE users (
@@ -430,7 +437,20 @@ CREATE TABLE oauth_providers (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (provider, provider_user_id)
 );
+
+-- Grant permissions to service user (client_api_user)
+GRANT CONNECT ON DATABASE client_api_db_devtest TO client_api_user;
+GRANT USAGE ON SCHEMA public TO client_api_user;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO client_api_user;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO client_api_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO client_api_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO client_api_user;
 ```
+
+**Important Notes**:
+- `CREATE DATABASE` must be the first command in V1 migration
+- `\c client_api_db_devtest` switches connection to the new database
+- All subsequent migrations (V2, V3, etc.) run against `client_api_db_devtest` automatically
 
 ---
 
@@ -558,6 +578,8 @@ flyway -configFiles=flyway.conf undo
 - **Auth Proxy**: Secure local access without VPN
 - **IAM Authentication**: No passwords required for Auth Proxy (IAM-based)
 - **Flyway Execution**: CI/CD only (not terraform-managed)
+- **Database Creation**: V1 migration must create database via `CREATE DATABASE` (Terraform doesn't create databases)
+- **Default Database**: AlloyDB clusters only have `postgres` database after Terraform deployment
 - **Baseline**: Run once per database after deployment (Phase 2.9)
 - **Migration Versioning**: Sequential (V1, V2, V3, ...)
 - **Rollback**: Create forward migration (V4__undo_v3.sql) or use Flyway Pro undo

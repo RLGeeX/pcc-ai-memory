@@ -67,17 +67,6 @@ module "alloydb_cluster_devtest" {
   backup_retention_days      = 30  # 30-day retention
   pitr_recovery_window_days  = 7   # 7-day PITR
 
-  # Databases (7 microservices)
-  databases = [
-    "auth_db_devtest",
-    "client_db_devtest",
-    "user_db_devtest",
-    "metric_builder_db_devtest",
-    "metric_tracker_db_devtest",
-    "task_builder_db_devtest",
-    "task_tracker_db_devtest"
-  ]
-
   # Labels
   labels = {
     environment = "devtest"
@@ -107,14 +96,29 @@ output "alloydb_devtest_primary_connection_string" {
   sensitive   = true
 }
 
-output "alloydb_devtest_replica_ip" {
-  description = "AlloyDB devtest replica instance IP address"
-  value       = module.alloydb_cluster_devtest.replica_ip_address
+output "alloydb_devtest_cluster_name" {
+  description = "AlloyDB devtest cluster full resource name"
+  value       = module.alloydb_cluster_devtest.cluster_name
 }
 
-output "alloydb_devtest_databases" {
-  description = "List of databases created in AlloyDB devtest cluster"
-  value       = module.alloydb_cluster_devtest.database_names
+output "alloydb_devtest_primary_instance_id" {
+  description = "AlloyDB devtest primary instance ID"
+  value       = module.alloydb_cluster_devtest.primary_instance_id
+}
+
+output "alloydb_devtest_primary_instance_name" {
+  description = "AlloyDB devtest primary instance full resource name"
+  value       = module.alloydb_cluster_devtest.primary_instance_name
+}
+
+output "alloydb_devtest_replica_instance_id" {
+  description = "AlloyDB devtest replica instance ID (if created)"
+  value       = module.alloydb_cluster_devtest.replica_instance_id
+}
+
+output "alloydb_devtest_replica_ip" {
+  description = "AlloyDB devtest replica instance IP address (if created)"
+  value       = module.alloydb_cluster_devtest.replica_ip_address
 }
 
 output "alloydb_devtest_psc_dns" {
@@ -142,17 +146,16 @@ output "alloydb_devtest_psc_dns" {
 - **Connection Method**: Use AlloyDB Auth Proxy (recommended) or direct connection via PSC DNS name
 - **No Manual Forwarding Rule**: AlloyDB handles PSC internally - no `google_compute_forwarding_rule` needed
 
-### Database Names
+### Database Name
 
-All 7 databases follow naming convention: `{service}_db_devtest`
+**Auto-Created Database**: AlloyDB automatically creates a default `postgres` database upon cluster creation.
 
-1. **auth_db_devtest**: Authentication API database
-2. **client_db_devtest**: Client Management API database
-3. **user_db_devtest**: User Management API database
-4. **metric_builder_db_devtest**: Metric Builder API database
-5. **metric_tracker_db_devtest**: Metric Tracker API database
-6. **task_builder_db_devtest**: Task Builder API database
-7. **task_tracker_db_devtest**: Task Tracker API database
+**Application Databases**: Additional databases (e.g., `client_api_db_devtest`) will be created via Flyway migrations in Phase 2.7, NOT via Terraform. This is because:
+- No `google_alloydb_database` Terraform resource exists
+- Database schema management is better handled by migration tools (Flyway)
+- Allows for proper versioning and rollback of database changes
+
+**Note**: Phase 2.4 will plan the database schema for Flyway migration scripts.
 
 ---
 
@@ -171,8 +174,8 @@ source = "../../pcc-tf-library/modules/alloydb-cluster"
 ### Sizing Parameters
 
 **CPU Count**: `2` (2 vCPUs per instance)
-- Sufficient for devtest workload (7 services)
-- Can scale up for production
+- Sufficient for devtest workload (pcc-client-api)
+- Can scale up for production or additional services
 
 **Memory**: Automatically configured (8 GB for 2 vCPUs)
 - Google-managed based on cpu_count
@@ -200,15 +203,17 @@ source = "../../pcc-tf-library/modules/alloydb-cluster"
 
 2. **Module Configuration**:
    - [ ] Set project_id: `pcc-prj-app-devtest`
-   - [ ] Set 7 database names
 
 3. **Outputs**:
    - [ ] Define cluster_id output
-   - [ ] Define primary_ip output
-   - [ ] Define connection_string output (sensitive)
-   - [ ] Define replica_ip output
-   - [ ] Define databases output
-   - [ ] Define psc_dns_name output (for connection configuration)
+   - [ ] Define cluster_name output
+   - [ ] Define primary_instance_id output
+   - [ ] Define primary_instance_name output
+   - [ ] Define primary_ip_address output
+   - [ ] Define primary_connection_string output (sensitive)
+   - [ ] Define replica_instance_id output
+   - [ ] Define replica_ip_address output
+   - [ ] Define psc_dns_name output
 
 4. **Validation**:
    - [ ] Verify module source reference
@@ -225,8 +230,9 @@ source = "../../pcc-tf-library/modules/alloydb-cluster"
 - Phase 1.2: Overflow subnet created (10.28.48.0/20)
 
 **Downstream**:
-- Phase 2.4: Databases defined in this module call
+- Phase 2.4: Database schema planning (for Flyway migrations, not Terraform)
 - Phase 2.5: Secret Manager will reference these databases
+- Phase 2.7: Flyway migrations will create application databases
 - Phase 2.8: Terraform validation will test this module call
 - Phase 2.9: Terraform apply will create cluster via this module
 
@@ -235,10 +241,9 @@ source = "../../pcc-tf-library/modules/alloydb-cluster"
 ## Validation Criteria
 
 - [ ] Module call created in `pcc-app-shared-infra/terraform/alloydb.tf`
-- [ ] All required variables provided (project_id, cluster_id)
-- [ ] 7 database names configured
+- [ ] All required variables provided (project_id, cluster_id, network_self_link, primary_instance_id)
+- [ ] All 9 module outputs defined
 - [ ] Module source references pcc-tf-library
-- [ ] Outputs defined for downstream usage (including PSC DNS name)
 - [ ] Configuration matches Phase 2.1 design
 - [ ] PSC configuration relies on AlloyDB auto-creation (no manual forwarding rule)
 
@@ -247,7 +252,7 @@ source = "../../pcc-tf-library/modules/alloydb-cluster"
 ## Deliverables
 
 - [ ] `pcc-app-shared-infra/terraform/alloydb.tf` (module call)
-- [ ] Module outputs for downstream phases (including PSC DNS name)
+- [ ] 9 module outputs defined (cluster, instances, connection details)
 - [ ] Configuration ready for validation (Phase 2.8)
 
 ---
@@ -269,7 +274,8 @@ source = "../../pcc-tf-library/modules/alloydb-cluster"
 - **No Manual PSC Resources**: AlloyDB handles PSC internally - no manual forwarding rules needed
 - **Connection Methods**: Use AlloyDB Auth Proxy (recommended) or direct PSC DNS connection
 - **Outputs**: Connection string marked sensitive (contains cluster path)
-- **Phase 2.4**: Database list provided via this module call (no separate terraform)
+- **Phase 2.4**: Database schema planning for Flyway migrations (not Terraform resource creation)
+- **Phase 2.7**: Flyway will create application databases (e.g., client_api_db_devtest)
 
 ---
 
@@ -278,9 +284,9 @@ source = "../../pcc-tf-library/modules/alloydb-cluster"
 **Planning + Configuration**: 15-20 minutes
 - 5 min: Create alloydb.tf file
 - 7 min: Configure module call with all parameters
-- 3 min: Define outputs (including PSC DNS name)
+- 5 min: Define 9 module outputs
 - 2 min: Verify configuration against Phase 2.1 design
 
 ---
 
-**Next Phase**: 2.4 - Plan 7 Database Resources
+**Next Phase**: 2.4 - Plan 1 Database Resource
