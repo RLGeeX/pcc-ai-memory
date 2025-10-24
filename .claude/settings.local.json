@@ -22,7 +22,8 @@
       "Skill(superpowers:brainstorming)",
       "Bash(sed:*)",
       "Bash(awk:*)",
-      "mcp__tavily__tavily-extract"
+      "mcp__tavily__tavily-extract",
+      "mcp__jira-pcc__searchJiraIssuesUsingJql"
     ],
     "deny": [],
     "ask": []
