@@ -27,6 +27,11 @@ Execute Flyway database migrations locally against AlloyDB devtest cluster. Veri
   - Flyway configuration created
 ✅ Phase 2.4 completed (AlloyDB cluster deployed)
 ✅ Phase 2.7 completed (Secrets created in Secret Manager)
+✅ **IAM Bootstrap completed**: See `$HOME/pcc/infra/pcc-app-shared-infra/docs/alloydb-iam-bootstrap.md`
+  - Postgres password retrieved from Secret Manager
+  - PostgreSQL users created for each individual developer
+  - Database permissions granted via GRANT statements
+  - IAM authentication tested and working
 ✅ gcloud CLI authenticated with appropriate permissions
 ✅ Flyway CLI installed locally (or will install in Step 1)
 ✅ `pcc-client-api` repository cloned locally
