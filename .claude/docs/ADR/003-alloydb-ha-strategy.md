@@ -274,21 +274,21 @@ module "alloydb" {
 module "alloydb_primary" {
   source       = "git::https://github.com/portco-connect/pcc-tf-library.git//modules/alloydb-multi-region?ref=main"
   cluster_id   = "pcc-alloydb-prod-primary"
-  region       = "us-east4"
+  region       = "us-east4"   # Primary region (ADR-009)
   cluster_type = "PRIMARY"
 }
 
-# SECONDARY cluster in us-west2
+# SECONDARY cluster in us-central1
 module "alloydb_secondary" {
   source        = "git::https://github.com/portco-connect/pcc-tf-library.git//modules/alloydb-multi-region?ref=main"
   cluster_id    = "pcc-alloydb-prod-secondary"
-  region        = "us-west2"
+  region        = "us-central1"   # Secondary region (ADR-009)
   cluster_type  = "SECONDARY"
   primary_cluster = module.alloydb_primary.cluster_name
 }
 ```
 
-**Note**: Multi-region requires new module (`alloydb-multi-region`), separate from current Phase 2 implementation.
+**Note**: Multi-region requires new module (`alloydb-multi-region`), separate from current Phase 2 implementation. Regional selection follows ADR-009.
 
 ### Cost Monitoring
 
@@ -317,6 +317,7 @@ module "alloydb_secondary" {
 - [Phase 2.1: AlloyDB Module Skeleton](./../plans/devtest-deployment/phase-2.1-implement-alloydb-module-skeleton.md)
 - [Phase 2.3: AlloyDB Configuration](./../plans/devtest-deployment/phase-2.3-create-alloydb-configuration.md)
 - [ADR-001: Two-Organization Apigee X Architecture](./001-two-org-apigee-architecture.md) (staging parity pattern)
+- [ADR-009: Regional Deployment Strategy](./009-regional-deployment-strategy.md) (us-east4 primary, us-central1 secondary)
 
 ## Approval
 

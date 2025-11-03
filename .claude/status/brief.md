@@ -1,101 +1,82 @@
 # Current Session Brief
 
-**Date**: 2025-10-24
-**Session Type**: Jira PCC-76 Update & Subtask Creation
-**Status**: ✅ COMPLETE - Phase 2 subtasks created, ready for developer execution
+**Date**: 2025-10-31
+**Session Type**: WireGuard VPN Plan - Gemini + Codex Validation & Critical Fixes
+**Status**: ✅ All critical issues fixed, plan deployment-ready
 
-## 🎯 Session Focus: Jira PCC-76 Phase 2 Subtask Creation
+## Recent Updates
 
-### Completed Tasks
-- ✅ **Updated PCC-76 Description**:
-  - Fixed database name: `client_api_db_devtest` → `client_api_db` (no environment suffix)
-  - Fixed instance count: 2 (primary + replica) → 1 (ZONAL primary only, cost-optimized)
-  - Fixed reference path: `.claude/plans/devtest-deployment/phase-2.*.md` → `plans/devtest-deployment/` (phases 0.1, 0.2, 2.1-2.12)
-  - Added note: Database created by Flyway migrations, not Terraform
+### WireGuard VPN Plan - CRITICAL FIXES APPLIED ✅
+- ✅ **Gemini + Codex validation complete** - Found and fixed 5 critical startup script issues
+- ✅ **Critical Issue #1**: Secret leakage in Cloud Logging (STDERR redirect removed)
+- ✅ **Critical Issue #2**: fetch_secret() corrupting keys (status to STDERR, secret to STDOUT)
+- ✅ **Critical Issue #3**: Missing gcloud CLI installation (added before secret fetching)
+- ✅ **Critical Issue #4**: Invalid Terraform VPC routes (VM now self-creates routes at boot)
+- ✅ **Critical Issue #5**: Hardcoded network interface (dynamic detection via ip route)
+- ✅ **Service account documentation**: Added Step 3a with required IAM roles
+- ✅ **Second review findings**: Added comprehensive Gemini + Codex findings section
+- **Status**: Plan is deployment-ready at `.claude/plans/2025-10-30-alloydb-vpn-access-design.md`
 
-- ✅ **Created 14 New Subtasks (PCC-107 through PCC-120)**:
-  - **Phase 0 Prerequisites (2 tasks)**:
-    - PCC-107: Phase 0.1 - Foundation Prerequisites (API enablement verification)
-    - PCC-108: Phase 0.2 - Network Infrastructure Validation (VPC verification)
-  - **Phase 2 AlloyDB + Database (12 tasks)**:
-    - PCC-109-110: Module creation (skeleton + instances)
-    - PCC-111-112: Configuration + deployment
-    - PCC-113-115: Secret Manager (module + config + deployment)
-    - PCC-116-117: IAM configuration + bindings
-    - PCC-118-119: Flyway preparation + execution
-    - PCC-120: Validation and deployment summary
+### Phase 2: AlloyDB Cluster - PSC CONNECTIVITY ADDED ✅
+- ✅ PCC-107 through PCC-114, PCC-116, PCC-118 completed
+- ✅ PSC cross-project connectivity implemented (AlloyDB → DevOps NonProd)
+- **Next**: Deploy PSC updates, then PCC-119 (Execute Flyway Migrations)
 
-- ✅ **Applied Metadata to All Subtasks**:
-  - Assignee: Christine Fogarty
-  - Priority: Medium
-  - Label: DevOps
-  - Status: To Do
-  - Parent: PCC-76
+### Phase 3: GKE DevOps Cluster - PLANNING COMPLETE
+- ✅ Documentation updates complete (Secret Manager replication, terraform init -upgrade)
+- ✅ Jira subtasks created (PCC-124 through PCC-135)
+- **Next**: PCC-124 (Add GKE API Configurations)
+- Ready for GKE Autopilot module creation and deployment
 
-- ✅ **Cleanup**:
-  - Deleted unwanted review document: `phase-2-database-review-report.md`
-  - User confirmed 9 old subtasks (PCC-92 through PCC-100) already deleted
+### ✅ Phase 6 Final Validation & Jira Subtasks (~2 hours)
+- **Gemini Validation**: Found and fixed 3 issues (Phase 6.11 kubectl exec gcloud, Phase 6.18 Redis/ExternalDNS egress)
+- **Codex Validation**: False positive on Dex (file already correct from previous session)
+- **Final Check**: All 6 NetworkPolicies confirmed with wide-open egress `- {}`
+- **Jira Subtasks**: Created 29 subtasks (PCC-136 through PCC-164) for Phase 6
+  - Parent: PCC-123, Assignee: Christine Fogarty, Label: DevOps
+  - Pattern: Purpose + success criteria + planning file path (no tool references)
 
-- ✅ **Created Handoff File**: `.claude/handoffs/Claude-2025-10-24-16-56.md`
+## WireGuard VPN Terraform Deployment - ALL ERRORS FIXED ✅
 
-## Infrastructure State
+**Date**: 2025-11-02
+**Status**: ✅ Ready for terraform apply
 
-**Total Deployed Resources**: 229
-- Foundation: 217 (15 GCP projects, AlloyDB APIs enabled)
-- Monitoring: 3
-- Devtest Networking: 4
-- State Bucket: 5 (centralized terraform state management)
-- **Phase 2 AlloyDB**: ✅ Ready for deployment (3 resources planned, Jira subtasks created)
-- **Phase 3 GKE**: Architecture complete, deployment-ready
-- **Phase 4 ArgoCD**: Planning 100% complete - All 14 subphases production-ready
+### Deployment Errors Fixed (8 total):
+1. ✅ Module sourcing - Changed from local paths to git sources with v0.1.0 tags
+2. ✅ Service account - Created reusable module, replaced direct resource
+3. ✅ GCS bucket IAM - Fixed for_each key (computed values → index-based)
+4. ✅ Instance template - Created module with configurable OS (debian-12)
+5. ✅ Firewall project IDs - Fixed to use network_project_id (Shared VPC)
+6. ✅ MIG update policy - Added distribution_policy_zones for single-zone regional MIG
+7. ✅ Org policy - Added project-level exemptions for external load balancers
+8. ✅ Load balancer scheme - Made configurable (EXTERNAL/INTERNAL)
 
-## Key Configuration (Phase 2)
-
-**AlloyDB Devtest Configuration**:
-- **1 ZONAL primary instance** (no read replica, cost-optimized ~$200/month)
-- **Database**: `client_api_db` (NO environment suffix, same name across all environments)
-- **Schema**: `public` (PostgreSQL default, developer confirmed)
-- **Differentiation**: At cluster level (`pcc-alloydb-devtest`)
-- **Password Generation**: `openssl rand -base64 32 | tr -d "=+/" | cut -c1-32`
-
-**Developer SQL Script**:
-- File: `01_InitialCreation.sql` → rename to `V1__InitialCreation.sql`
-- Content: 14 tables (13 developer tables + `__EFMigrationsHistory`)
-- Schema: `public` (no explicit prefix)
-- Extensions: NONE (built-in PostgreSQL types only)
-- Size: 313 lines, 19 indexes, 19 seed records
-
-**Execution Model**:
-- **Flyway**: Local execution on developer's machine
-- **Auth Proxy**: Local, using developer's gcloud credentials
-- **No Kubernetes**: Migrations run locally, not in GKE cluster
+### Infrastructure Ready:
+- 19 resources to create
+- All modules tagged v0.1.0
+- Location: `infra/pcc-devops-infra/terraform/environments/nonprod/`
+- Command: `terraform init -upgrade && terraform plan && terraform apply`
 
 ## Next Steps
 
-**Phase 2 AlloyDB Deployment** - Execute subtasks sequentially:
+**WireGuard VPN Deployment**: Execute terraform apply
+- All deployment errors resolved
+- Modules committed and tagged
+- Ready for WARP execution
 
-1. **Phase 0.1 (PCC-107)**: Verify GCP API enablement
-   - `alloydb.googleapis.com`, `servicenetworking.googleapis.com`, `secretmanager.googleapis.com`
-   - Verify project: `pcc-prj-app-devtest`
+**Phase 2**: PSC Deployment & Flyway Migrations
+- Deploy PSC updates to AlloyDB (terraform apply in app-shared-infra/devtest)
+- Deploy PSC consumer (terraform apply in devops-infra/nonprod)
+- Then execute PCC-119 (Flyway Migrations via PSC connection)
 
-2. **Phase 0.2 (PCC-108)**: Verify VPC network
-   - Network: `pcc-vpc-nonprod` in `pcc-prj-net-shared`
-   - Subnets exist for devtest
+**Phase 3**: Ready for PCC-124 (Add GKE API Configurations)
 
-3. **Phase 2.1-2.12 (PCC-109 through PCC-120)**: AlloyDB deployment
-   - Terraform modules and configuration (2.1-2.3)
-   - Infrastructure deployment (2.4)
-   - Secret Manager setup (2.5-2.7)
-   - IAM bindings (2.8-2.9)
-   - Flyway migrations (2.10-2.11)
-   - Validation and summary (2.12)
-
-**Location**: `plans/devtest-deployment/phase-0.1-foundation-prerequisites.md` through `phase-2.12-validation-and-deployment.md`
+**Phase 6**: Ready for execution starting with PCC-136
 
 ---
 
-**Session Status**: ✅ **Jira PCC-76 updated with 14 subtasks**. All metadata applied (assignee, priority, DevOps label). Phase 2 AlloyDB deployment ready to execute starting Phase 0.1. Previous session Phase 2 plan corrections included (network variable, password generation, database naming).
-
-**Session Duration**: ~40 minutes
-**Token Usage**: 97k/200k (103k remaining)
-**Handoff Reference**: `.claude/handoffs/Claude-2025-10-24-16-56.md`
+**Session Status**: ✅ **WireGuard VPN Plan - ALL CRITICAL ISSUES FIXED**
+**Session Duration**: ~30 minutes
+**Token Usage**: 115k/200k (58% budget used)
+**Files Modified**: 2 (VPN plan + brief)
+**Critical Fixes**: 5 startup script bugs + service account IAM documentation

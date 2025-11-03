@@ -71,9 +71,10 @@ We will use **Google Secret Manager** as the primary secret management solution 
 - (etc. for all environments and services)
 
 **Replication Strategy**:
-- **Automatic replication** (default): Google manages multi-region replication
-- **Rationale**: Simplicity, built-in redundancy, acceptable for all current use cases
-- **Future**: User-managed replication for specific compliance requirements
+- **User-managed replication** (required): Organization policies forbid automatic (global) replication
+- **Devtest/Dev**: No replication (single region: us-east4)
+- **Staging/Prod**: User-managed replicas in us-east4 (primary) and us-central1 (secondary) per ADR-009
+- **Rationale**: Compliance with org-level policies, regional control, cost optimization for non-prod
 
 ### Secret Types
 
@@ -306,12 +307,37 @@ variable "rotation_period" {
   default     = null  # No rotation by default
 }
 
+variable "replica_locations" {
+  description = "List of regions for user-managed replication (empty = no replication)"
+  type        = list(string)
+  default     = []  # No replication by default (devtest/dev)
+}
+
 resource "google_secret_manager_secret" "secret" {
   secret_id = var.secret_id
   project   = var.project_id
 
+  # User-managed replication (required by org policy)
+  # Devtest/dev: single region only
+  # Staging/prod: us-east4 + us-central1
   replication {
-    automatic = true
+    dynamic "user_managed" {
+      for_each = length(var.replica_locations) > 0 ? [1] : []
+      content {
+        dynamic "replicas" {
+          for_each = var.replica_locations
+          content {
+            location = replicas.value
+          }
+        }
+      }
+    }
+
+    # Single region (no replication) - for devtest/dev
+    dynamic "auto" {
+      for_each = length(var.replica_locations) == 0 ? [1] : []
+      content {}
+    }
   }
 
   dynamic "rotation" {
@@ -445,6 +471,7 @@ gcloud secrets versions access 2 \
 - [Phase 2.6: Create Secrets Configuration](./../plans/devtest-deployment/phase-2.6-create-secrets-configuration.md)
 - [Phase 2.7: Deploy Secrets](./../plans/devtest-deployment/phase-2.7-deploy-secrets.md)
 - [ADR-003: AlloyDB HA Strategy](./003-alloydb-ha-strategy.md)
+- [ADR-009: Regional Deployment Strategy](./009-regional-deployment-strategy.md) (us-east4 primary, us-central1 secondary)
 
 ## Approval
 

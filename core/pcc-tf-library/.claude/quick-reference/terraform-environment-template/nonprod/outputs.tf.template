@@ -1,0 +1,49 @@
+# Terraform Output Declarations
+#
+# Define outputs to expose resource attributes
+# Outputs can be:
+# - Referenced by other terraform configurations
+# - Displayed after terraform apply
+# - Queried with terraform output command
+#
+# ⚠️ CUSTOMIZE: Add outputs specific to your service
+
+# Example: Module Outputs
+# Replace with your actual module outputs
+
+output "example_id" {
+  description = "The ID of the example resource"
+  value       = module.example_service.id
+}
+
+output "example_name" {
+  description = "The name of the example resource"
+  value       = module.example_service.name
+}
+
+# Example: Sensitive Output
+output "example_connection_string" {
+  description = "Connection string for the example resource"
+  value       = module.example_service.connection_string
+  sensitive   = true  # Mark as sensitive to hide from logs
+}
+
+# Standard Outputs (Recommended)
+
+output "project_id" {
+  description = "GCP project ID used for this deployment"
+  value       = var.project_id
+}
+
+output "region" {
+  description = "GCP region used for this deployment"
+  value       = var.region
+}
+
+# TODO: Add service-specific outputs below
+# Example:
+# output "cluster_endpoint" {
+#   description = "GKE cluster endpoint"
+#   value       = module.gke_cluster.endpoint
+#   sensitive   = true
+# }

@@ -1,0 +1,18 @@
+# Terraform Backend Configuration
+#
+# REQUIRED UPDATES:
+# 1. Replace <SERVICE_NAME> with your service (e.g., "app-shared-infra", "devops-infra", "user-api-infra")
+# 2. Replace <ENVIRONMENT> with environment name (e.g., "devtest", "dev", "staging", "prod", "nonprod")
+#
+# Pattern: "<SERVICE_NAME>/<ENVIRONMENT>"
+# Examples:
+#   - "app-shared-infra/devtest"
+#   - "devops-infra/nonprod"
+#   - "user-api-infra/prod"
+
+terraform {
+  backend "gcs" {
+    bucket = "pcc-terraform-state"
+    prefix = "<SERVICE_NAME>/<ENVIRONMENT>"  # ⚠️ UPDATE THIS
+  }
+}

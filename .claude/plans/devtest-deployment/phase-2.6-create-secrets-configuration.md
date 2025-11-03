@@ -60,8 +60,9 @@ module "alloydb_password" {
   # Automatic rotation every 90 days
   rotation_period = 7776000 # 90 days in seconds
 
-  # Automatic replication (multi-region)
-  replication_policy = "automatic"
+  # No replication for devtest (single region: us-east4)
+  # For staging/prod, use: replica_locations = ["us-east4", "us-central1"]
+  replica_locations = []  # Devtest: no replication
 }
 
 # Database Connection String Secret
@@ -89,8 +90,8 @@ module "alloydb_connection_string" {
   # Sync rotation with password (90 days)
   rotation_period = 7776000
 
-  # Automatic replication
-  replication_policy = "automatic"
+  # No replication for devtest (single region: us-east4)
+  replica_locations = []
 
   depends_on = [module.alloydb_password]
 }
@@ -115,8 +116,8 @@ module "alloydb_connection_name" {
   # No rotation needed for connection name (static metadata)
   rotation_period = null
 
-  # Automatic replication
-  replication_policy = "automatic"
+  # No replication for devtest (single region: us-east4)
+  replica_locations = []
 }
 ```
 

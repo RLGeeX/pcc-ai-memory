@@ -8,7 +8,7 @@
 
 ## Overview
 
-This plan outlines the 9 phases required to deploy the complete Apigee X pipeline infrastructure for the devtest environment. Each phase is designed to be focused, executable in 1-2 sessions, and properly sequenced with clear dependencies.
+This plan outlines the 13 phases required to deploy the complete Apigee X pipeline infrastructure for the devtest environment. Each phase is designed to be focused, executable in 1-2 sessions, and properly sequenced with clear dependencies.
 
 ### Key Architectural Decisions
 
@@ -20,7 +20,7 @@ This plan outlines the 9 phases required to deploy the complete Apigee X pipelin
 - Single AlloyDB cluster in pcc-app-shared-infra (us-east4)
 - 1 database: client_api_db_devtest (for pcc-client-api)
 - Flyway schema migrations in CI/CD pipeline
-- Additional databases created in Phase 10 when remaining services are deployed
+- Additional databases created in Phase 13 when remaining services are deployed
 
 **Container Strategy:**
 - Image naming: `pcc-app-{service}` (NO environment suffix)
@@ -48,9 +48,9 @@ This plan outlines the 9 phases required to deploy the complete Apigee X pipelin
 - Folder assignment only
 
 **Out of Scope:**
-- Subnets (deferred to Phase 7)
-- API enablement (deferred to Phase 7)
-- IAM bindings (deferred to Phase 7)
+- Subnets (deferred to Phase 11)
+- API enablement (deferred to Phase 11)
+- IAM bindings (deferred to Phase 11)
 
 **Dependencies**: None
 
@@ -145,7 +145,7 @@ This plan outlines the 9 phases required to deploy the complete Apigee X pipelin
     - Configure `Max Pool Size=100`, `Connection Lifetime=300` (5 min max connection age)
   - Monitoring: Cloud Logging alerts for Secret Manager rotation events
   - Circuit breaker: Retry logic for credential refresh failures (use Polly library with exponential backoff)
-  - Testing: Rotation simulation included in Phase 6 validation (trigger rotation, verify no service disruption)
+  - Testing: Rotation simulation included in Phase 9 validation (trigger rotation, verify no service disruption)
 
 **IAM Database Access (Google Groups):**
 - Grant `roles/alloydb.client` to:
@@ -163,7 +163,7 @@ This plan outlines the 9 phases required to deploy the complete Apigee X pipelin
 **GKE Workload Connectivity:**
 - Direct connection via Private Service Connect (configured in Phase 1)
 - Services read credentials from Secret Manager at runtime
-- Workload Identity bindings configured in Phase 3
+- Workload Identity bindings configured in Phases 3-5 (GKE clusters)
 
 **Flyway Integration:**
 - Schema migrations executed via CI/CD pipeline
@@ -194,51 +194,124 @@ This plan outlines the 9 phases required to deploy the complete Apigee X pipelin
 
 ---
 
-### Phase 3: GKE Clusters (3 Total)
+### Phase 3: DevOps NonProd GKE Cluster
 
-**Objective**: Deploy Autopilot GKE clusters for devops and devtest workloads with cross-project IAM and namespace configuration
+**Objective**: Deploy DevOps NonProd GKE Autopilot cluster for infrastructure experimentation and testing
 
-**Clusters to Create:**
+**Cluster to Create:**
 
-1. **pcc-prj-devops-nonprod** (system services)
-   - Subnet: 10.24.128.0/20 (existing)
-   - Purpose: Nonprod system utilities, monitoring
-   - Autopilot mode
-
-2. **pcc-prj-devops-prod** (ArgoCD primary)
-   - Subnet: 10.16.128.0/20 (existing)
-   - Purpose: ArgoCD, production system services
-   - Autopilot mode
-
-3. **pcc-prj-app-devtest** (application workloads)
-   - Subnet: Created in Phase 1
-   - Purpose: pcc-client-api service (single service deployment)
-   - Autopilot mode
+**pcc-prj-devops-nonprod** (system services experimentation)
+- Project: pcc-prj-devops-nonprod
+- Subnet: 10.24.128.0/20 (existing from Phase 1)
+- Purpose: Test ArgoCD configurations, GKE upgrades, system utilities
+- **Experimentation zone**: Safe environment to break and test new patterns
+- Autopilot mode (Google-managed nodes)
 
 **Cluster Configuration:**
 - Autopilot mode (Google-managed nodes)
-- Private clusters (no external IPs on nodes)
+- Private cluster (no external IPs on nodes)
 - Workload Identity enabled
+- Release channel: Stable
+- Binary Authorization (future)
+
+**Dependencies**: Phase 2 complete (AlloyDB cluster operational)
+
+**Deliverables:**
+- 1 GKE Autopilot cluster (pcc-prj-devops-nonprod)
+- kubectl context configuration
+- Basic cluster access for platform team
+
+**Validation:**
+- `kubectl get nodes` succeeds
+- Cluster accessible via kubectl
+- Workload Identity enabled on cluster
+- Private cluster verified (nodes have no external IPs)
+
+**Size Estimate**: 150-200 lines of planning
+
+---
+
+### Phase 4: DevOps Prod GKE Cluster
+
+**Objective**: Deploy DevOps Prod GKE Autopilot cluster for production ArgoCD control plane
+
+**Cluster to Create:**
+
+**pcc-prj-devops-prod** (ArgoCD primary control plane)
+- Project: pcc-prj-devops-prod
+- Subnet: 10.16.128.0/20 (existing from Phase 1)
+- Purpose: Production ArgoCD, production system services
+- **Production control plane**: Manages ALL application clusters (devtest, dev, staging, prod)
+- Autopilot mode (Google-managed nodes)
+
+**Cluster Configuration:**
+- Autopilot mode (Google-managed nodes)
+- Private cluster (no external IPs on nodes)
+- Workload Identity enabled
+- Release channel: Stable
 - Binary Authorization (future)
 
 **Cross-Project IAM Bindings:**
 
 1. **Cloud Build SA → pcc-prj-devops-prod:**
    - Role: `roles/artifactregistry.writer`
-   - Purpose: Push Docker images to Artifact Registry
+   - Purpose: Push Docker images to Artifact Registry in devops-prod project
 
-2. **Cloud Build SA → pcc-app-shared-infra:**
+**Dependencies**: Phase 3 complete (devops-nonprod cluster exists and tested)
+
+**Deliverables:**
+- 1 GKE Autopilot cluster (pcc-prj-devops-prod)
+- 1 cross-project IAM binding (Cloud Build → Artifact Registry)
+- kubectl context configuration
+- Cluster access configured for ArgoCD deployment
+
+**Validation:**
+- `kubectl get nodes` succeeds
+- Cluster accessible via kubectl
+- Workload Identity enabled on cluster
+- Private cluster verified (nodes have no external IPs)
+- **Cross-project IAM validation**:
+  - [ ] Cloud Build SA can write to Artifact Registry in pcc-prj-devops-prod
+    - Test: Trigger test build, verify image push succeeds
+
+**Size Estimate**: 150-200 lines of planning
+
+---
+
+### Phase 5: App DevTest GKE Cluster
+
+**Objective**: Deploy App DevTest GKE Autopilot cluster for application workloads with cross-project IAM and namespace configuration
+
+**Cluster to Create:**
+
+**pcc-prj-app-devtest** (application workloads)
+- Project: pcc-prj-app-devtest
+- Subnet: Created in Phase 1
+- Purpose: pcc-client-api service (single service deployment for devtest)
+- Autopilot mode (Google-managed nodes)
+
+**Cluster Configuration:**
+- Autopilot mode (Google-managed nodes)
+- Private cluster (no external IPs on nodes)
+- Workload Identity enabled
+- Release channel: Stable
+- Binary Authorization (future)
+- **GKE Ingress**: Internal HTTP(S) Load Balancer for Apigee connectivity (ADR-002)
+
+**Cross-Project IAM Bindings:**
+
+1. **Cloud Build SA → pcc-app-shared-infra:**
    - Role: `roles/secretmanager.secretAccessor`
    - Purpose: Read database credentials during build (for Flyway migrations)
 
-3. **ArgoCD SA → pcc-prj-app-devtest:**
+2. **ArgoCD SA → pcc-prj-app-devtest:**
    - Role: `roles/container.admin`
    - Purpose: Manage Kubernetes deployments via GitOps
 
 **Kubernetes Namespaces & RBAC:**
 
 1. **Namespace:**
-   - `pcc-client-api-devtest` (single namespace for this deployment)
+   - `pcc-client-api-devtest` (single namespace for devtest deployment)
 
 2. **RBAC Policies:**
    - ArgoCD service account: `cluster-admin` in pcc-client-api-devtest namespace
@@ -246,71 +319,117 @@ This plan outlines the 9 phases required to deploy the complete Apigee X pipelin
    - gcp-devops@pcconnect.ai: `admin` role (full namespace control)
    - gcp-admins@pcconnect.ai: `cluster-admin` role (full cluster access)
 
-**Dependencies**: Phase 1 complete (app-devtest subnet exists), Phase 2 complete (AlloyDB cluster operational)
+**Dependencies**: Phase 4 complete (devops-prod cluster exists for ArgoCD), Phase 2 complete (AlloyDB cluster operational)
 
 **Deliverables:**
-- 3 GKE Autopilot clusters
-- 3 cross-project IAM binding patterns (Cloud Build → Artifact Registry, Cloud Build → Secret Manager, ArgoCD → GKE)
-- 1 Kubernetes namespace manifest (pcc-client-api-devtest) in ArgoCD repo (deployed via GitOps in Phase 4+)
+- 1 GKE Autopilot cluster (pcc-prj-app-devtest)
+- 2 cross-project IAM bindings (Cloud Build → Secret Manager, ArgoCD → GKE)
+- 1 Kubernetes namespace manifest (pcc-client-api-devtest) in ArgoCD repo (deployed via GitOps in Phase 6+)
 - RBAC policies for 3 Google groups (developers: edit, devops: admin, admins: cluster-admin)
 - Cluster access configured for ArgoCD
-- kubectl context configurations
+- kubectl context configuration
 
 **Validation:**
-- `kubectl get nodes` on all 3 clusters
-- **Cross-project IAM validation checklist**:
-  - [ ] Cloud Build SA can write to Artifact Registry in pcc-prj-devops-prod
-    - Test: Trigger build, verify image push succeeds
+- `kubectl get nodes` succeeds
+- Cluster accessible via kubectl
+- Workload Identity enabled on cluster
+- Private cluster verified (nodes have no external IPs)
+- **Cross-project IAM validation**:
   - [ ] Cloud Build SA can read secrets from pcc-app-shared-infra
     - Test: Cloud Build can fetch Secret Manager value during build (for Flyway migrations)
   - [ ] ArgoCD SA can manage deployments in pcc-prj-app-devtest
-    - Test: ArgoCD can sync application successfully (Phase 4+)
-- Namespace manifest (pcc-client-api-devtest) created in ArgoCD repo (deployed in Phase 4 when ArgoCD is operational)
+    - Test: ArgoCD can sync application successfully (Phase 6+)
+- Namespace manifest (pcc-client-api-devtest) created in ArgoCD repo (deployed in Phase 6 when ArgoCD is operational)
 - RBAC validated: Developers can exec/port-forward (edit role), devops can admin, ArgoCD can deploy
-- Internal connectivity between clusters and AlloyDB
+- Internal connectivity between cluster and AlloyDB verified
 
-**Size Estimate**: 450-550 lines of planning
+**Size Estimate**: 200-250 lines of planning
 
 ---
 
-### Phase 4: ArgoCD on DevOps Prod Cluster
+### Phase 6: ArgoCD on DevOps NonProd Cluster
 
-**Objective**: Deploy ArgoCD GitOps controller for automated deployments
+**Objective**: Deploy ArgoCD GitOps controller for testing and experimentation
 
 **Scope:**
-- ArgoCD installation on pcc-prj-devops-prod cluster
-- App-of-apps pattern configuration
+- ArgoCD installation on pcc-prj-devops-nonprod cluster
+- App-of-apps pattern configuration (testing)
 - Repository connections (GitHub)
 - RBAC and access control
+- **Purpose**: Test ArgoCD configurations, version upgrades, GKE upgrades
 
 **ArgoCD Configuration:**
 - Deploy via Helm chart
 - Configure GitHub integration
+- Set up test application projects
+- Configure sync policies (manual for testing)
+- **Experimentation zone**: Safe to break, test new patterns
+
+**GitOps Repositories:**
+- `core/pcc-app-argo-config` (ArgoCD application manifests - test branch)
+- Test manifests for validation
+
+**Dependencies**: Phase 3 complete (devops-nonprod cluster exists)
+
+**Deliverables:**
+- ArgoCD running on pcc-prj-devops-nonprod
+- Test app-of-apps root application configured
+- GitHub repository connections
+- ArgoCD UI accessible (internal only)
+- Testing environment for ArgoCD upgrades
+
+**Validation:**
+- ArgoCD UI accessible
+- Repository connections healthy
+- Can sync test application successfully
+- ArgoCD version upgrade tested (if applicable)
+
+**Size Estimate**: 200-250 lines of planning
+
+---
+
+### Phase 7: ArgoCD on DevOps Prod Cluster
+
+**Objective**: Deploy production ArgoCD GitOps controller for managing all clusters
+
+**Scope:**
+- ArgoCD installation on pcc-prj-devops-prod cluster
+- App-of-apps pattern configuration (production)
+- Repository connections (GitHub)
+- RBAC and access control
+- **Purpose**: Production control plane managing ALL clusters (devtest, dev, staging, prod)
+
+**ArgoCD Configuration:**
+- Deploy via Helm chart (battle-tested config from Phase 6)
+- Configure GitHub integration
 - Set up application projects (one per microservice)
-- Configure sync policies (automated for devtest)
+- Configure sync policies (automated for devtest, manual gates for prod)
+- **No experiments**: Only proven patterns from Phase 6
 
 **GitOps Repositories:**
 - `core/pcc-app-argo-config` (ArgoCD application manifests)
 - `infra/{service}-api-infra` (Kubernetes manifests per service)
 
-**Dependencies**: Phase 3 complete (devops-prod cluster exists)
+**Dependencies**: Phase 4 complete (devops-prod cluster exists), Phase 6 complete (ArgoCD config tested in nonprod)
 
 **Deliverables:**
 - ArgoCD running on pcc-prj-devops-prod
 - App-of-apps root application configured
 - GitHub repository connections
 - ArgoCD UI accessible (internal only)
+- Production control plane operational
 
 **Validation:**
 - ArgoCD UI accessible
 - Repository connections healthy
 - Can sync test application successfully
+- Promotion path validated (nonprod config → prod deployment)
 
 **Size Estimate**: 250-300 lines of planning
 
 ---
 
-### Phase 5: Pipeline Library (pcc-pipeline-library)
+### Phase 8: Pipeline Library (pcc-pipeline-library)
 
 **Objective**: Create reusable Cloud Build pipeline scripts for all microservices
 
@@ -328,7 +447,7 @@ This plan outlines the 9 phases required to deploy the complete Apigee X pipelin
 - 9-step pipeline: checkout → build → test → docker → spec → argo → wait → apigee → notify
 - Parameterized for service-specific configuration
 
-**Dependencies**: Phase 4 complete (ArgoCD operational)
+**Dependencies**: Phase 7 complete (ArgoCD on DevOps Prod operational)
 
 **Deliverables:**
 - pcc-pipeline-library repository created
@@ -345,7 +464,7 @@ This plan outlines the 9 phases required to deploy the complete Apigee X pipelin
 
 ---
 
-### Phase 6: Service Infrastructure (pcc-client-api)
+### Phase 9: Service Infrastructure (pcc-client-api)
 
 **Objective**: Deploy service-specific infrastructure for pcc-client-api
 
@@ -357,7 +476,7 @@ This plan outlines the 9 phases required to deploy the complete Apigee X pipelin
 - Create IAM binding: service account → Secret Manager (read client_db_devtest credentials)
 - Terraform module calls from `core/pcc-tf-library`
 
-**Dependencies**: Phase 3 complete (GKE cluster exists), Phase 2 complete (AlloyDB with client_db_devtest exists)
+**Dependencies**: Phase 5 complete (App DevTest GKE cluster exists), Phase 2 complete (AlloyDB with client_db_devtest exists)
 
 **Deliverables:**
 - pcc-client-api-devtest service account created
@@ -374,13 +493,13 @@ This plan outlines the 9 phases required to deploy the complete Apigee X pipelin
 
 ---
 
-### Phase 7: First Service Deployment (pcc-client-api)
+### Phase 10: First Service Deployment (pcc-client-api)
 
-**Objective**: Deploy pcc-client-api to Kubernetes through the CI/CD pipeline (Apigee deployment deferred to Phase 8)
+**Objective**: Deploy pcc-client-api to Kubernetes through the CI/CD pipeline (Apigee deployment deferred to Phase 11)
 
 **Service Selection**: `pcc-client-api` (client management service)
 
-**Scope:** Phase 7 focuses on Kubernetes deployment only. API proxy deployment to Apigee (deploy-apigee.sh) is deferred to Phase 8 when Apigee infrastructure is operational.
+**Scope:** Phase 10 focuses on Kubernetes deployment only. API proxy deployment to Apigee (deploy-apigee.sh) is deferred to Phase 11 when Apigee infrastructure is operational.
 
 **End-to-End Flow (Steps 1-8 only):**
 1. GitHub commit triggers Cloud Build
@@ -392,7 +511,7 @@ This plan outlines the 9 phases required to deploy the complete Apigee X pipelin
 7. wait-argocd.sh: ArgoCD detects change, syncs to pcc-prj-app-devtest
 8. Kubernetes deployment successful, service running on GKE
 
-**Step 9 Deferred:** deploy-apigee.sh (API proxy deployment) will be enabled in Phase 8 after Apigee nonprod org is operational.
+**Step 9 Deferred:** deploy-apigee.sh (API proxy deployment) will be enabled in Phase 11 after Apigee nonprod org is operational.
 
 **Validation Criteria:**
 - Service healthy in GKE
@@ -401,7 +520,7 @@ This plan outlines the 9 phases required to deploy the complete Apigee X pipelin
 - Logs visible in Cloud Logging
 - Can manually curl service from within cluster
 
-**Dependencies**: Phase 5 complete (pipeline library ready), Phase 6 complete (service account and IAM configured)
+**Dependencies**: Phase 8 complete (pipeline library ready), Phase 9 complete (service account and IAM configured)
 
 **Deliverables:**
 - pcc-client-api deployed to devtest
@@ -419,7 +538,7 @@ This plan outlines the 9 phases required to deploy the complete Apigee X pipelin
 
 ---
 
-### Phase 8: Apigee Nonprod Org + Devtest Environment
+### Phase 11: Apigee Nonprod Org + Devtest Environment
 
 **Objective**: Deploy Apigee X nonprod organization with devtest environment as API gateway, including API Product configuration
 
@@ -523,7 +642,7 @@ This plan outlines the 9 phases required to deploy the complete Apigee X pipelin
      - Required permissions for PSC endpoint connectivity
      - Service attachment consumer authorization
 
-**Dependencies**: Phase 7 complete (pcc-client-api running on GKE)
+**Dependencies**: Phase 10 complete (pcc-client-api running on GKE)
 
 **Deliverables:**
 - Apigee nonprod organization operational
@@ -536,7 +655,7 @@ This plan outlines the 9 phases required to deploy the complete Apigee X pipelin
 - API product `pcc-devtest-all-services` created
 - Descope JWT validation policy configured
 - Test developer app with API key
-- Internal API endpoint accessible (via Apigee, before external LB in Phase 9)
+- Internal API endpoint accessible (via Apigee, before external LB in Phase 12)
 
 **Validation:**
 - Apigee organization healthy
@@ -557,7 +676,7 @@ This plan outlines the 9 phases required to deploy the complete Apigee X pipelin
 
 ---
 
-### Phase 9: External HTTPS Load Balancer & Connectivity
+### Phase 12: External HTTPS Load Balancer & Connectivity
 
 **Objective**: Configure external HTTPS connectivity to make Apigee devtest environment accessible from the internet
 
@@ -566,7 +685,7 @@ This plan outlines the 9 phases required to deploy the complete Apigee X pipelin
 1. **Network Endpoint Group (NEG):**
    - **Type**: Private Service Connect NEG for Apigee
    - **Region**: us-east4 (matches Apigee runtime instance region)
-   - **Target**: Apigee nonprod runtime instance (service attachment from Phase 7)
+   - **Target**: Apigee nonprod runtime instance (service attachment from Phase 11)
    - **Configuration**:
      - Obtain Apigee service attachment URI from Apigee org
      - Create PSC NEG in pcc-prj-apigee-nonprod or separate network project
@@ -625,7 +744,7 @@ This plan outlines the 9 phases required to deploy the complete Apigee X pipelin
    - **Rate Limiting**: Defer for devtest (not needed for low-volume testing)
    - **Future Production**: Add rate limiting (1000 req/min per IP)
 
-**Dependencies**: Phase 8 complete (Apigee nonprod org and runtime instance operational)
+**Dependencies**: Phase 11 complete (Apigee nonprod org and runtime instance operational)
 
 **Deliverables:**
 - Network Endpoint Group (NEG) for Apigee instances
@@ -658,7 +777,7 @@ This plan outlines the 9 phases required to deploy the complete Apigee X pipelin
 
 ---
 
-### Phase 10: Remaining Services (Placeholder)
+### Phase 13: Remaining Services (Placeholder)
 
 **Objective**: Scale out infrastructure and deployments for remaining 6 microservices
 
@@ -672,25 +791,25 @@ This plan outlines the 9 phases required to deploy the complete Apigee X pipelin
   - pcc-task-tracker-api
 
 **Pattern for Each Service:**
-1. **Service Infrastructure** (repeat Phase 6 pattern):
+1. **Service Infrastructure** (repeat Phase 9 pattern):
    - Deploy terraform from `infra/pcc-{service}-api-infra`
    - Create service account
    - Create Workload Identity binding
    - Create IAM binding to Secret Manager
 
-2. **Service Deployment** (repeat Phase 7 pattern):
+2. **Service Deployment** (repeat Phase 10 pattern):
    - CI/CD pipeline deployment
    - ArgoCD GitOps sync
    - Database migrations (Flyway)
    - Health check validation
 
-3. **Apigee Integration** (extend Phase 8):
+3. **Apigee Integration** (extend Phase 11):
    - Deploy OpenAPI spec to Apigee
    - Create API proxy
    - Add to existing environment group
    - Update GKE Ingress with new path
 
-**Dependencies**: Phase 9 complete (pcc-client-api fully operational end-to-end)
+**Dependencies**: Phase 12 complete (pcc-client-api fully operational end-to-end)
 
 **Deliverables:**
 - All 7 microservices deployed to devtest
@@ -699,7 +818,7 @@ This plan outlines the 9 phases required to deploy the complete Apigee X pipelin
 
 **Note**: This is a placeholder phase. Detailed planning will be done if/when required.
 
-**Size Estimate**: Use established patterns from Phases 6-8
+**Size Estimate**: Use established patterns from Phases 9-11
 
 ---
 

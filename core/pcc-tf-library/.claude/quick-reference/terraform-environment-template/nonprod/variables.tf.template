@@ -1,0 +1,55 @@
+# Terraform Variable Declarations
+#
+# Define all input variables here
+# Actual values are set in terraform.tfvars
+#
+# ADD YOUR SERVICE-SPECIFIC VARIABLES BELOW
+
+# Standard Variables (Required for most deployments)
+
+variable "project_id" {
+  description = "GCP project ID for this environment"
+  type        = string
+}
+
+variable "region" {
+  description = "GCP region for resources"
+  type        = string
+  default     = "us-east4"
+}
+
+# Networking Variables (if using Shared VPC)
+
+variable "network_project_id" {
+  description = "Project ID for Shared VPC network"
+  type        = string
+  default     = ""  # Optional: Set if using Shared VPC
+}
+
+variable "vpc_network_name" {
+  description = "VPC network name"
+  type        = string
+  default     = ""  # Optional: Set if using Shared VPC
+}
+
+variable "subnet_name" {
+  description = "Subnet name for resources"
+  type        = string
+  default     = ""  # Optional: Set if using subnets
+}
+
+# Resource Labels (Recommended)
+
+variable "labels" {
+  description = "Common labels to apply to all resources"
+  type        = map(string)
+  default     = {}
+}
+
+# TODO: Add service-specific variables below
+# Example:
+# variable "instance_type" {
+#   description = "GKE node instance type"
+#   type        = string
+#   default     = "e2-standard-4"
+# }

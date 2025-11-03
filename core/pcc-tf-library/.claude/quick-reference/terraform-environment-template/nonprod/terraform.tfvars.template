@@ -1,0 +1,31 @@
+# Terraform Variable Values for NonProd Environment
+#
+# ⚠️ REQUIRED UPDATES:
+# 1. Update project_id with actual GCP project
+# 2. Update network_project_id if using Shared VPC
+# 3. Update all other values for your service
+# 4. Add service-specific variable values
+#
+# DO NOT COMMIT SENSITIVE VALUES (use Secret Manager or env vars)
+
+# Standard Configuration
+project_id = "<YOUR_PROJECT_ID>"  # ⚠️ REQUIRED: e.g., "pcc-prj-devops-nonprod"
+region     = "us-east4"
+
+# Shared VPC Configuration (if applicable)
+network_project_id = "pcc-prj-net-shared"  # Update if using Shared VPC
+vpc_network_name   = "pcc-vpc-nonprod"     # Update if using Shared VPC
+subnet_name        = "<YOUR_SUBNET_NAME>"   # ⚠️ REQUIRED: e.g., "pcc-subnet-devops-nonprod"
+
+# Resource Labels
+labels = {
+  environment = "nonprod"
+  managed_by  = "terraform"
+  cost_center = "engineering"
+  # Add more labels as needed
+}
+
+# TODO: Add service-specific values below
+# Example:
+# cluster_name = "pcc-gke-devops-nonprod"
+# node_count   = 3

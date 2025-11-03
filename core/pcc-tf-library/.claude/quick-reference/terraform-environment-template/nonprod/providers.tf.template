@@ -1,0 +1,22 @@
+# Terraform and Provider Version Configuration
+#
+# Pin terraform and provider versions for stability
+# Update versions as needed for your project
+
+terraform {
+  required_version = ">= 1.5.0"
+
+  required_providers {
+    google = {
+      source  = "hashicorp/google"
+      version = "~> 5.0"  # Update to specific version if needed
+    }
+  }
+}
+
+# Google Cloud Provider
+# Project and region are pulled from variables for flexibility
+provider "google" {
+  project = var.project_id
+  region  = var.region
+}

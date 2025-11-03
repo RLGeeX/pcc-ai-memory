@@ -115,22 +115,20 @@ variable "cluster_display_name" {
 variable "automated_backup_policy" {
   description = "Automated backup configuration"
   type = object({
-    enabled                 = bool
-    backup_window           = string # 4-hour window, e.g., "03:00-07:00"
-    location                = string # Backup storage location
-    retention_count         = number # Number of backups to retain
-    retention_period_days   = number # Days to retain backups
-    weekly_schedule_enabled = bool
-    weekly_schedule_days    = list(string) # e.g., ["MONDAY", "WEDNESDAY", "FRIDAY"]
+    enabled                  = bool
+    location                 = string       # Backup storage location
+    backup_window_start_hour = number       # Hour of day (0-23) in UTC when backup starts
+    retention_count          = number       # Number of backups to retain
+    retention_period_days    = number       # Days to retain backups
+    days_of_week             = list(string) # Days to run backups, e.g., ["MONDAY", "WEDNESDAY", "FRIDAY"]
   })
   default = {
-    enabled                 = true
-    backup_window           = "03:00-07:00"
-    location                = "us-east4"
-    retention_count         = 7
-    retention_period_days   = 30
-    weekly_schedule_enabled = false
-    weekly_schedule_days    = []
+    enabled                  = true
+    location                 = "us-east4"
+    backup_window_start_hour = 7 # 7 AM UTC = 2-3 AM EST (low traffic)
+    retention_count          = 7
+    retention_period_days    = 30
+    days_of_week             = ["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"]
   }
 }
 
@@ -161,7 +159,8 @@ variable "encryption_config" {
 ```
 
 **Key Decisions**:
-- Backup window defaults to 3-7am (low traffic)
+- Backup window starts at 7 AM UTC (2-3 AM EST, low traffic)
+- Daily backups on all days of the week
 - 30-day backup retention (standard)
 - 7-day PITR window (cost-optimized for devtest)
 - CMEK optional (can add later for production)
@@ -236,10 +235,19 @@ resource "google_alloydb_cluster" "cluster" {
 
   # Automated daily backups
   automated_backup_policy {
-    enabled = var.automated_backup_policy.enabled
+    enabled  = var.automated_backup_policy.enabled
     location = var.automated_backup_policy.location
 
-    backup_window = var.automated_backup_policy.backup_window
+    weekly_schedule {
+      days_of_week = var.automated_backup_policy.days_of_week
+
+      start_times {
+        hours   = var.automated_backup_policy.backup_window_start_hour
+        minutes = 0
+        seconds = 0
+        nanos   = 0
+      }
+    }
 
     quantity_based_retention {
       count = var.automated_backup_policy.retention_count
@@ -247,13 +255,6 @@ resource "google_alloydb_cluster" "cluster" {
 
     time_based_retention {
       retention_period = "${var.automated_backup_policy.retention_period_days}d"
-    }
-
-    dynamic "weekly_schedule" {
-      for_each = var.automated_backup_policy.weekly_schedule_enabled ? [1] : []
-      content {
-        days_of_week = var.automated_backup_policy.weekly_schedule_days
-      }
     }
 
     labels = {
@@ -279,10 +280,10 @@ resource "google_alloydb_cluster" "cluster" {
 ```
 
 **Key Features**:
-- Daily automated backups (3-7am)
+- Daily automated backups (starts 7 AM UTC / 2-3 AM EST)
 - 30-day retention (quantity + time-based)
 - PITR enabled (7-day window)
-- Optional weekly backup schedule
+- Runs on all days of the week
 - Optional CMEK encryption
 - Managed by terraform label
 

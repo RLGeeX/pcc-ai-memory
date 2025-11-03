@@ -1,0 +1,40 @@
+# Main Resource Configuration
+#
+# Replace this example with your actual service resources
+# Reference modules from pcc-tf-library with Git source and version pinning
+#
+# ⚠️ REQUIRED: Update module source, name, and inputs for your service
+
+# Example: GKE Autopilot Module
+# Replace with your actual module call
+
+module "example_service" {
+  source = "git::https://github.com/portco-connect/pcc-tf-library.git//modules/<MODULE_NAME>?ref=main"
+
+  # Required inputs (update based on your module)
+  project_id = var.project_id
+  region     = var.region
+
+  # Networking (if applicable)
+  network_id = var.network_project_id != "" ? "projects/${var.network_project_id}/global/networks/${var.vpc_network_name}" : null
+  subnet_id  = var.subnet_name != "" ? "projects/${var.network_project_id}/regions/${var.region}/subnetworks/${var.subnet_name}" : null
+
+  # Module-specific inputs
+  # Add your service-specific variables here
+
+  # Labels
+  labels = merge(
+    var.labels,
+    {
+      service = "<SERVICE_NAME>"  # ⚠️ UPDATE THIS
+    }
+  )
+}
+
+# TODO: Add additional resources or modules as needed
+# Example:
+# resource "google_storage_bucket" "example" {
+#   name     = "my-bucket-${var.project_id}"
+#   location = var.region
+#   labels   = var.labels
+# }

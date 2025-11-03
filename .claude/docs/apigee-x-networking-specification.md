@@ -56,7 +56,7 @@ This document provides comprehensive Terraform specifications for deploying Apig
                       ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                  Apigee X Runtime (Instance)                     │
-│                  Region: us-central1                             │
+│                  Region: us-east4                             │
 │                  CIDR: 10.87.8.0/22 (/22 + /28)                 │
 └─────────────────────┬───────────────────────────────────────────┘
                       │
@@ -315,7 +315,7 @@ resource "google_apigee_organization" "apigee_org" {
   display_name                         = "PCC Apigee Organization (${var.environment})"
   description                          = "Apigee organization for PortCo Connect ${var.environment} environment"
   project_id                           = var.project_id
-  analytics_region                     = var.apigee_analytics_region  # e.g., "us-central1"
+  analytics_region                     = var.apigee_analytics_region  # e.g., "us-east4"
   runtime_type                         = "CLOUD"
   billing_type                         = "EVALUATION"  # or "SUBSCRIPTION" for production
 
@@ -353,8 +353,8 @@ Apigee instances are regional deployments of the runtime plane.
 ```hcl
 resource "google_apigee_instance" "apigee_instance" {
   name                     = "pcc-apigee-instance-${var.environment}"
-  location                 = var.apigee_instance_region  # e.g., "us-central1"
-  description              = "Apigee runtime instance for ${var.environment} (us-central1)"
+  location                 = var.apigee_instance_region  # e.g., "us-east4"
+  description              = "Apigee runtime instance for ${var.environment} (us-east4)"
   display_name             = "PCC Instance (${var.environment})"
   org_id                   = google_apigee_organization.apigee_org.id
 
@@ -914,13 +914,13 @@ variable "environment" {
 variable "apigee_instance_region" {
   description = "GCP region for Apigee instance"
   type        = string
-  default     = "us-central1"
+  default     = "us-east4"
 }
 
 variable "apigee_analytics_region" {
   description = "Region for Apigee analytics data"
   type        = string
-  default     = "us-central1"
+  default     = "us-east4"
 }
 
 variable "peering_range_cidr" {
@@ -1256,7 +1256,7 @@ resource "google_compute_firewall" "apigee_to_gke" {
 | Component | Configuration | Estimated Cost |
 |-----------|---------------|----------------|
 | Apigee Organization | Evaluation (90-day trial) | $0 |
-| Apigee Instance | 2 nodes, us-central1 | ~$700 |
+| Apigee Instance | 2 nodes, us-east4 | ~$700 |
 | VPC Network | Standard | $0 |
 | Cloud NAT | Auto-allocated IPs, 1 region | ~$50 |
 | VPC Peering | Data transfer | ~$0.01/GB |
@@ -1504,7 +1504,7 @@ gcloud compute firewall-rules list \
 # Check NAT configuration
 gcloud compute routers nats describe pcc-apigee-nat-devtest \
   --router=pcc-apigee-router-devtest \
-  --region=us-central1
+  --region=us-east4
 
 # Verify NAT logs
 gcloud logging read "resource.type=nat_gateway" --limit 50
@@ -1671,8 +1671,8 @@ resource "google_apigee_instance" "apigee_instance" {
 
 project_id               = "pcc-project-devtest"
 environment              = "devtest"
-apigee_instance_region   = "us-central1"
-apigee_analytics_region  = "us-central1"
+apigee_instance_region   = "us-east4"
+apigee_analytics_region  = "us-east4"
 
 # IP addressing
 peering_range_cidr = "10.87.0.0/16"
