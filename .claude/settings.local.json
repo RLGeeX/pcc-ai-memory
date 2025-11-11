@@ -36,5 +36,9 @@
     ],
     "deny": [],
     "ask": []
-  }
+  },
+  "enabledMcpjsonServers": [
+    "jira-pcc"
+  ],
+  "enableAllProjectMcpServers": true
 }

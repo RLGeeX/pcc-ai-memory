@@ -1,0 +1,9 @@
+{
+  "feature": "phase1-week3",
+  "created": "2025-11-11T20:30:00Z",
+  "totalChunks": 6,
+  "currentChunk": 1,
+  "status": "pending",
+  "contextTokens": 4350,
+  "description": "Phase 1 Week 3: Safety & Observability - Backup/restore services, tenant sync --apply, confirmation prompts, progress indicators, tenant create command. Target: 25+ tests passing."
+}

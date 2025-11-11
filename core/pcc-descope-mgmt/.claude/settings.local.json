@@ -1,0 +1,11 @@
+{
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "jira-pcc"
+  ],
+  "permissions": {
+    "allow": [
+      "Skill(cc-unleashed:write-plan)"
+    ]
+  }
+}

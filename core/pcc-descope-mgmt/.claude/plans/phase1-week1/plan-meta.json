@@ -1,0 +1,9 @@
+{
+  "feature": "phase1-week1",
+  "created": "2025-11-11T19:30:00Z",
+  "totalChunks": 8,
+  "currentChunk": 1,
+  "status": "pending",
+  "contextTokens": 4350,
+  "description": "Phase 1 Week 1: Foundation - Project setup, Pydantic models, config loader, and Descope API integration with PyrateLimiter. Target: 40+ unit tests passing. Chunk 3 split into 3a/3b/3c for better sizing."
+}

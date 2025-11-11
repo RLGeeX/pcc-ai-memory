@@ -1,0 +1,9 @@
+{
+  "feature": "phase2-week6",
+  "created": "2025-11-11T20:30:00Z",
+  "totalChunks": 5,
+  "currentChunk": 1,
+  "status": "pending",
+  "contextTokens": 4350,
+  "description": "Phase 2 Week 6: Advanced Operations - Batch parallelism, tenant/flow delete, audit logging, rate limit verification. Target: 20+ tests passing."
+}
