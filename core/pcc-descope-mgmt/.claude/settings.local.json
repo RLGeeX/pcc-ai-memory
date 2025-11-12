@@ -1,11 +1,12 @@
 {
+  "permissions": {
+    "allow": [
+      "Skill(cc-unleashed:write-plan)",
+      "Skill(cc-unleashed:brainstorming)"
+    ]
+  },
   "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
     "jira-pcc"
-  ],
-  "permissions": {
-    "allow": [
-      "Skill(cc-unleashed:write-plan)"
-    ]
-  }
+  ]
 }
