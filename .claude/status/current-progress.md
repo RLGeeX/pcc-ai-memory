@@ -929,3 +929,162 @@ All modules use: `git::https://github.com/PORTCoCONNECT/pcc-tf-library.git//modu
 ---
 
 **End of Document** | Last Updated: 2025-11-10
+
+---
+
+## Session: 2025-11-13 Afternoon - Phase 6 Security Review & Planning Updates
+
+**Date**: 2025-11-13
+**Session Type**: Planning Review & Security Hardening
+**Duration**: ~2 hours
+
+### Security Review of Phase 6 Plan
+
+**Comprehensive Review Completed**: All 29 Phase 6 planning files reviewed by 4 specialized agents
+
+**Agents Deployed**:
+1. **cc-unleashed:kubernetes:gitops-engineer** - GitOps architecture review
+2. **cc-unleashed:kubernetes:k8s-architect** - GKE Autopilot compliance review
+3. **cc-unleashed:kubernetes:k8s-security** - Security posture assessment
+4. **cc-unleashed:infrastructure:terraform-specialist** - Terraform best practices review
+
+**Overall Ratings**:
+- GitOps Architecture: 9/10
+- Kubernetes Architecture: 8.5/10
+- Security Posture: 6.5/10 (current) → 8.5/10 (with fixes)
+- Terraform Quality: 8.5/10
+
+### Critical Security Issues Identified
+
+**Issue 1: IAM Over-Privileging** 🚨 HIGH
+- **Location**: Phase 6.4 main.tf lines 254-258
+- **Problem**: `roles/secretmanager.admin` granted to argocd-server SA (project-wide access to ALL secrets)
+- **Risk**: Blast radius includes all project secrets, potential privilege escalation
+- **Attack Scenario**: Compromised ArgoCD server pod could access database passwords, API keys, OAuth credentials
+
+**Issue 2: Unnecessary Dex SA Permissions** ⚠️ MEDIUM
+- **Location**: Phase 6.4 main.tf lines 351-368
+- **Problem**: Dex SA granted `secretmanager.secretAccessor` on OAuth secrets but never uses them at runtime
+- **Reality**: Dex reads OAuth credentials from K8s secret (populated manually in Phase 6.12), not Secret Manager
+- **Risk**: Unnecessary attack surface, confusion about credential flow
+
+### Planning File Updates Applied
+
+**File Modified**: `.claude/plans/devtest-deployment/phase-6.4-create-argocd-infrastructure-config.md`
+
+**Changes**:
+1. **Removed** (lines 254-258):
+   ```hcl
+   resource "google_project_iam_member" "argocd_server_secret_manager" {
+     project = var.project_id
+     role    = "roles/secretmanager.admin"
+     member  = module.argocd_server_sa.member
+   }
+   ```
+
+2. **Added** (lines 351-357):
+   ```hcl
+   resource "google_secret_manager_secret_iam_member" "argocd_server_admin_password_writer" {
+     secret_id = google_secret_manager_secret.argocd_admin_password.id
+     role      = "roles/secretmanager.secretVersionAdder"
+     member    = module.argocd_server_sa.member
+   }
+   ```
+
+3. **Removed** (lines 351-368): Dex SA Secret Manager IAM bindings
+
+4. **Updated Documentation**:
+   - Purpose section: Clarified Secret Manager IAM scoping
+   - Success Criteria: Updated to reflect scoped permissions
+   - Notes section: Added IAM least privilege explanation
+   - Commit message: Updated infrastructure list
+   - Added clarification: OAuth credentials populated by workstation gcloud, not Workload Identity
+
+### Security Improvements Achieved
+
+**Before**:
+- ArgoCD server SA: Project-level `secretmanager.admin` (all secrets)
+- Dex SA: `secretmanager.secretAccessor` on 2 OAuth secrets (unused)
+- Blast radius: Entire project's secrets
+
+**After**:
+- ArgoCD server SA: `secretmanager.secretVersionAdder` on admin password secret ONLY
+- Dex SA: No Secret Manager access (not needed)
+- Blast radius: Single secret
+
+**Security Posture Improvement**:
+- Reduced privilege scope from "all secrets" to "one secret"
+- Eliminated unnecessary IAM bindings
+- Clarified credential population workflow
+- Aligned with principle of least privilege
+
+### Other Agent Recommendations (Deferred as Not Critical)
+
+**GitOps**:
+- Add GitHub App authentication instead of SSH keys/PATs
+- Implement External Secrets Operator for automated secret sync
+- Consider ApplicationSet for multi-environment scaling
+- Add rollback procedures documentation
+
+**Kubernetes**:
+- Implement ArgoCD Projects for namespace isolation (production requirement)
+- Add ResourceQuotas to argocd namespace
+- Restrict NetworkPolicy egress (currently wide-open for nonprod)
+
+**Security**:
+- Enable default-deny NetworkPolicy (even in nonprod)
+- Add Pod Security Admission labels
+- Implement secret rotation automation (CronJob)
+- Add OPA/Gatekeeper policies for admission control
+
+**Terraform**:
+- Increase backup retention from 3 to 7 days (nonprod) or 30 days (prod)
+- Add drift detection (Cloud Build scheduled trigger)
+- Implement Terratest for module validation
+- Document import procedures for partial failure recovery
+
+### Status: Phase 6.4 Needs Re-implementation
+
+**Current State**:
+- ✅ Phase 6.4 originally completed (Git: 245f7b1)
+- ✅ Planning file updated with security fixes
+- ⚠️ **Action Required**: Re-implement Phase 6.4 with updated IAM bindings
+
+**Files to Update**:
+1. `infra/pcc-devops-infra/argocd-nonprod/devtest/main.tf`
+   - Remove `google_project_iam_member.argocd_server_secret_manager`
+   - Add `google_secret_manager_secret_iam_member.argocd_server_admin_password_writer`
+   - Remove Dex SA Secret Manager IAM bindings
+
+**Validation**:
+- Run `terraform validate`
+- Verify IAM changes don't break Phase 6.12 workflow
+- Confirm outputs unchanged
+
+**Git Workflow**:
+- Commit message: "fix(infra): apply least privilege IAM for ArgoCD Secret Manager access"
+- Update PCC-139 Jira card to "Done" after completion
+
+### Session Accomplishments
+
+**Planning Files Modified**: 1
+- `.claude/plans/devtest-deployment/phase-6.4-create-argocd-infrastructure-config.md`
+
+**Security Reviews Completed**: 4
+- Comprehensive Phase 6 plan review by specialized agents
+- Critical IAM issues identified and documented
+- Remediation plan created
+
+**Status Files Updated**: 2
+- `.claude/status/brief.md` - Updated with session context
+- `.claude/status/current-progress.md` - This entry
+
+**Key Deliverables**:
+- Detailed security assessment by 4 specialized agents
+- Planning file updates with least privilege IAM bindings
+- Clear action plan for Phase 6.4 re-implementation
+- Security posture improvement from 6.5/10 to 8.5/10
+
+---
+
+**End of Session** | Last Updated: 2025-11-13

@@ -5,7 +5,7 @@
 
 ## Purpose
 
-Create Terraform configuration that calls the 3 generic modules (service-account, workload-identity, managed-certificate) to provision ArgoCD infrastructure: 6 GCP service accounts, 6 Workload Identity bindings, 1 SSL certificate, and 1 GCS bucket for Velero backups.
+Create Terraform configuration that calls the 3 generic modules (service-account, workload-identity, managed-certificate) to provision ArgoCD infrastructure: 6 GCP service accounts, 6 Workload Identity bindings, 3 Secret Manager secrets for OAuth credentials and admin password, IAM bindings for secret access, 1 SSL certificate, and 1 GCS bucket for Velero backups.
 
 ## Prerequisites
 
@@ -244,16 +244,10 @@ resource "google_project_iam_member" "argocd_controller_compute_viewer" {
   member  = module.argocd_controller_sa.member
 }
 
-# ArgoCD Server - write logs and manage secrets
+# ArgoCD Server - write logs
 resource "google_project_iam_member" "argocd_server_logging" {
   project = var.project_id
   role    = "roles/logging.logWriter"
-  member  = module.argocd_server_sa.member
-}
-
-resource "google_project_iam_member" "argocd_server_secret_manager" {
-  project = var.project_id
-  role    = "roles/secretmanager.admin"
   member  = module.argocd_server_sa.member
 }
 
@@ -297,6 +291,74 @@ resource "google_storage_bucket" "argocd_backups" {
     purpose     = "argocd-velero-backups"
   }
 }
+
+# -------------------------------------------------------------------
+# Secret Manager for OAuth Credentials
+# -------------------------------------------------------------------
+
+# OAuth Client ID Secret (value populated in Phase 6.6)
+resource "google_secret_manager_secret" "argocd_oauth_client_id" {
+  secret_id = "argocd-oauth-client-id"
+  project   = var.project_id
+
+  replication {
+    auto {}
+  }
+
+  labels = {
+    environment = "nonprod"
+    managed_by  = "terraform"
+    purpose     = "argocd-oidc"
+  }
+}
+
+# OAuth Client Secret (value populated in Phase 6.6)
+resource "google_secret_manager_secret" "argocd_oauth_client_secret" {
+  secret_id = "argocd-oauth-client-secret"
+  project   = var.project_id
+
+  replication {
+    auto {}
+  }
+
+  labels = {
+    environment = "nonprod"
+    managed_by  = "terraform"
+    purpose     = "argocd-oidc"
+  }
+}
+
+# Admin Password Secret (value populated in Phase 6.12)
+resource "google_secret_manager_secret" "argocd_admin_password" {
+  secret_id = "argocd-admin-password"
+  project   = var.project_id
+
+  replication {
+    user_managed {
+      replicas {
+        location = var.region
+      }
+    }
+  }
+
+  labels = {
+    environment = "nonprod"
+    managed_by  = "terraform"
+    purpose     = "argocd-admin-emergency-access"
+  }
+}
+
+# Grant ArgoCD Server SA permission to write admin password to Secret Manager
+# Note: This is scoped to the single secret, not project-wide admin
+resource "google_secret_manager_secret_iam_member" "argocd_server_admin_password_writer" {
+  secret_id = google_secret_manager_secret.argocd_admin_password.id
+  role      = "roles/secretmanager.secretVersionAdder"
+  member    = module.argocd_server_sa.member
+}
+
+# Note: OAuth credentials are populated manually in Phase 6.6 using workstation gcloud credentials
+# Dex reads OAuth credentials from K8s secret (populated in Phase 6.12), not directly from Secret Manager
+# Therefore, no IAM bindings needed for Dex SA to access Secret Manager
 
 # -------------------------------------------------------------------
 # GCP-Managed SSL Certificate
@@ -367,6 +429,22 @@ output "ssl_certificate_domains" {
   description = "Domains covered by SSL certificate"
   value       = module.argocd_cert.domains
 }
+
+# Secret Manager Resources
+output "oauth_client_id_secret_name" {
+  description = "Secret Manager secret name for OAuth client ID"
+  value       = google_secret_manager_secret.argocd_oauth_client_id.secret_id
+}
+
+output "oauth_client_secret_secret_name" {
+  description = "Secret Manager secret name for OAuth client secret"
+  value       = google_secret_manager_secret.argocd_oauth_client_secret.secret_id
+}
+
+output "admin_password_secret_name" {
+  description = "Secret Manager secret name for ArgoCD admin password"
+  value       = google_secret_manager_secret.argocd_admin_password.secret_id
+}
 ```
 
 ### Step 6: Create terraform.tfvars
@@ -412,7 +490,9 @@ Create Terraform configuration for ArgoCD deployment on GKE Autopilot.
 Infrastructure created:
 - 6 GCP service accounts (controller, server, dex, redis, externaldns, velero)
 - 6 Workload Identity bindings for K8s SA → GCP SA auth
-- IAM roles: container.viewer, compute.viewer, logging.logWriter, secretmanager.admin
+- IAM roles: container.viewer, compute.viewer, logging.logWriter
+- Secret-scoped IAM: secretVersionAdder on admin password secret only
+- 3 Secret Manager secrets (OAuth client ID/secret, admin password)
 - GCS bucket for Velero backups (3-day retention)
 - GCP-managed SSL certificate for argocd.nonprod.pcconnect.ai
 
@@ -430,7 +510,9 @@ git push origin main
 - ✅ `terraform validate` passes
 - ✅ Configuration references all 3 generic modules with v0.1.0 tag
 - ✅ 6 service accounts + 6 WI bindings configured
-- ✅ IAM roles match requirements (secretmanager.admin for argocd-server)
+- ✅ IAM roles match requirements (scoped Secret Manager access for argocd-server)
+- ✅ 3 Secret Manager secrets configured (OAuth credentials + admin password)
+- ✅ ArgoCD Server SA granted secretVersionAdder on admin password secret only
 - ✅ GCS bucket has 3-day lifecycle policy
 - ✅ SSL certificate targets correct domain
 - ✅ Git commit follows conventional format
@@ -453,7 +535,10 @@ Proceed to **Phase 6.5**: Create Helm Values Configuration
 ## Notes
 
 - **CRITICAL**: This configuration does NOT deploy infrastructure yet (Phase 6.7 does that)
-- ArgoCD server SA has `secretmanager.admin` to write admin password via Workload Identity
+- **Secret Manager secrets created empty**: Values populated manually in Phase 6.6 (OAuth) and Phase 6.12 (admin password)
+- **IAM Least Privilege**: ArgoCD server SA has `secretmanager.secretVersionAdder` on admin password secret ONLY (not project-wide admin)
+- **No Dex Secret Manager Access**: Dex reads OAuth credentials from K8s secret, not directly from Secret Manager
+- **OAuth Population**: Phase 6.6 and 6.12 use workstation gcloud credentials (not Workload Identity) to populate secrets
 - ExternalDNS does NOT need GCP DNS roles (uses Cloudflare API token instead)
 - Velero SA has `storage.objectAdmin` on backup bucket (not project-wide)
 - terraform init -upgrade is REQUIRED because v0.1.0 tags may be force-pushed

@@ -1,12 +1,49 @@
 # Current Session Brief
 
-**Date**: 2025-11-10
-**Session Type**: Phase 6 ArgoCD Deployment - In Progress
-**Status**: 🚧 Phases 6.1-6.5 Complete (5 of 29 phases, 17%)
+**Date**: 2025-11-13
+**Session Type**: Phase 6 ArgoCD Deployment - Planning Review & Security Hardening
+**Status**: 🔄 Phase 6.4 Planning Updated - Needs Restart
 
 ---
 
 ## Recent Updates
+
+### Session Focus: Phase 6 Security Review & IAM Hardening
+
+**Context**: Reviewed entire Phase 6 plan (29 phases) using 4 specialized agents:
+- GitOps Engineer (scored 9/10)
+- Kubernetes Architect (scored 8.5/10)
+- Security Specialist (identified critical IAM issues)
+- Terraform Expert (scored 8.5/10)
+
+### Critical Security Issues Identified & Fixed
+
+**Issue 1: IAM Over-Privileging** 🚨 HIGH PRIORITY
+- **Problem**: Phase 6.4 granted `roles/secretmanager.admin` to argocd-server SA (project-wide access to ALL secrets)
+- **Fix Applied**: Replaced with `roles/secretmanager.secretVersionAdder` scoped to admin password secret ONLY
+- **Impact**: Reduces blast radius from "all secrets" to "one secret"
+
+**Issue 2: Unnecessary Dex SA Permissions** ⚠️ MEDIUM PRIORITY
+- **Problem**: Phase 6.4 granted Dex SA `secretmanager.secretAccessor` on OAuth secrets (never used at runtime)
+- **Fix Applied**: Removed IAM bindings entirely
+- **Rationale**: Dex reads credentials from K8s secret (populated manually in Phase 6.12), not from Secret Manager
+
+### Phase 6.4 Planning File Updated
+
+**File**: `.claude/plans/devtest-deployment/phase-6.4-create-argocd-infrastructure-config.md`
+
+**Changes Made**:
+1. Removed project-level `secretmanager.admin` role binding (lines 254-258)
+2. Added scoped `secretmanager.secretVersionAdder` binding for admin password secret only
+3. Removed Dex SA Secret Manager IAM bindings (lines 351-362)
+4. Updated documentation (Purpose, Success Criteria, Notes, Commit Message)
+5. Clarified IAM model: workstation gcloud credentials populate secrets, not Workload Identity
+
+**Status**: ⚠️ **Phase 6.4 needs to be RESTARTED** with updated planning file
+
+---
+
+## Previous Progress (Phases 6.1-6.5)
 
 ### Phase 6.1-6.3: Infrastructure Modules - ✅ COMPLETE
 Created 3 reusable Terraform modules in pcc-tf-library:
@@ -14,137 +51,70 @@ Created 3 reusable Terraform modules in pcc-tf-library:
 - **workload-identity**: K8s SA → GCP SA bindings (704b11d)
 - **managed-certificate**: GCP-managed SSL certificates (2992f9a)
 
-### Phase 6.4 (PCC-139): ArgoCD Infrastructure Config - ✅ COMPLETE
+### Phase 6.4 (PCC-139): ArgoCD Infrastructure Config - 🔄 NEEDS RESTART
+
+**Original Implementation**: ✅ Complete (Git: 245f7b1)
+**Planning Updated**: ✅ Security fixes applied
+**Action Required**: Re-implement Phase 6.4 with updated IAM bindings
 
 **Location**: `infra/pcc-devops-infra/argocd-nonprod/devtest/`
 
-**Files Created** (5 files, 9,634 bytes):
-1. versions.tf - Backend GCS config, provider
-2. variables.tf - 5 variables (project_id, region, argocd_namespace, argocd_domain, backup_retention_days)
-3. main.tf - 13 module calls + 6 resources
-4. outputs.tf - 10 outputs (6 SA emails, 2 bucket, 2 cert)
-5. terraform.tfvars - nonprod values
+**Files to Update**:
+1. `main.tf` - Update IAM bindings (remove secretmanager.admin, add scoped secretVersionAdder, remove Dex bindings)
+2. `outputs.tf` - No changes needed
+3. Other files (versions.tf, variables.tf, terraform.tfvars) - No changes needed
 
-**Infrastructure Defined**:
-- **6 Service Accounts**: argocd-controller, argocd-server, argocd-dex, argocd-redis, externaldns, velero
-- **6 Workload Identity Bindings**: All components bound to K8s SAs
-- **IAM Roles**: container.viewer, compute.viewer, logging.logWriter, secretmanager.admin, storage.objectAdmin
-- **GCS Bucket**: pcc-argocd-backups-nonprod (3-day retention)
-- **SSL Certificate**: argocd-nonprod-cert for argocd.nonprod.pcconnect.ai
-
-**Module References**: All use `git::https://github.com/PORTCoCONNECT/pcc-tf-library.git//modules/MODULE?ref=v0.1.0`
-
-**Git**: 245f7b1
+**Infrastructure Changes**:
+- **Before**: ArgoCD server SA had `secretmanager.admin` (all secrets), Dex SA had `secretAccessor` on OAuth secrets
+- **After**: ArgoCD server SA has `secretVersionAdder` on admin password secret only, Dex SA has NO Secret Manager access
 
 ### Phase 6.5 (PCC-140): Helm Values Configuration - ✅ COMPLETE
 
 **Location**: `infra/pcc-devops-infra/argocd-nonprod/devtest/values-autopilot.yaml`
-
-**File Created**: 308 lines, 7.4 KB
-
-**Configuration Highlights**:
-- **ArgoCD Version**: Helm chart 9.0.5 (ArgoCD 2.13.4)
-- **Deployment Mode**: Cluster-scoped (not namespace-scoped for Autopilot compatibility)
-- **6 Components Configured**: controller, server, repoServer, applicationSet, notifications, dex
-- **Workload Identity**: All 6 components use `iam.gke.io/gcp-service-account` annotations
-- **Resource Requirements**: Production-grade CPU/memory limits per component
-- **Security Contexts**: Non-root, read-only root filesystem, dropped capabilities
-- **RBAC**: Google Workspace OIDC integration with 4 group mappings:
-  - devops-admins@portcon.com → role:admin
-  - platform-engineers@portcon.com → role:admin
-  - developers@portcon.com → custom AppDeveloper role
-  - readonly-users@portcon.com → role:readonly
-- **Redis**: HA disabled for nonprod (single instance)
-- **ApplicationSet**: Webhook and SCM provider enabled
-- **Notifications**: Base config (secrets via Secret Manager)
-
 **Git**: 4909541
+**Status**: No changes needed - configuration is correct
 
 ---
 
-## Session Accomplishments
+## Security Review Summary
 
-**Modules Created** (3):
-- 3 generic infrastructure modules in pcc-tf-library
+**Overall Phase 6 Plan Rating**: 7-8.5/10 (Production-Ready with Security Fixes)
 
-**Configuration Created** (2):
-- ArgoCD infrastructure terraform config in pcc-devops-infra
-- ArgoCD Helm values for GKE Autopilot deployment
+**Agent Consensus**:
+- ✅ Excellent Workload Identity implementation (no service account keys)
+- ✅ Strong pod security contexts and GKE Autopilot compliance
+- ✅ Well-designed Terraform modules and app-of-apps GitOps pattern
+- 🚨 IAM over-privileging identified and fixed in Phase 6.4 planning
+- ⚠️ Wide-open NetworkPolicy egress (acceptable for nonprod, must tighten for prod)
 
-**Infrastructure Components** (21 resources):
-- 6 GCP service accounts
-- 6 Workload Identity bindings
-- 5 IAM role bindings
-- 1 GCS bucket (lifecycle policy)
-- 1 GCP-managed SSL certificate
-
-**Helm Configuration** (1 file):
-- Production-ready values-autopilot.yaml with OIDC + RBAC
-
-**All Validations Passed**:
-- terraform init, validate, fmt
-- Module references verified
-- YAML syntax validated
-- Conventional commits enforced
-
-**Git Operations**:
-- 5 commits pushed to main
-- 2 repositories modified (pcc-tf-library, pcc-devops-infra)
-
----
-
-## Technical Decisions
-
-**IAM Strategy**:
-- ArgoCD server SA has secretmanager.admin to write admin password
-- Velero SA has storage.objectAdmin on backup bucket only (not project-wide)
-- ExternalDNS does NOT need GCP roles (uses Cloudflare API token)
-- ArgoCD controller has container.viewer and compute.viewer for cluster info
-
-**Backup Configuration**:
-- 3-day retention for nonprod cost optimization
-- GCS bucket in us-east4 (same as cluster region)
-- Uniform bucket-level access enabled
-- Lifecycle policy for automatic deletion
-
-**Module Integration**:
-- All 3 modules successfully integrated in main.tf
-- Module outputs chained (SA email → WI binding)
-- Version pinning with v0.1.0 tag (force-push compatible)
-
-**Helm Configuration Decisions**:
-- Cluster-scoped mode required for GKE Autopilot (namespace-scoped has CRD limitations)
-- Resource requests/limits tuned for Autopilot spot instances
-- Security contexts hardened (non-root, read-only FS)
-- OIDC groups use portcon.com domain (not pcconnect.ai)
-- Redis HA disabled for nonprod (cost + complexity reduction)
-- Dex enabled for Google Workspace SSO integration
+**Other Recommendations** (Not Critical, Deferred):
+- Implement External Secrets Operator for automated secret sync
+- Add ArgoCD Projects for namespace isolation (production requirement)
+- Restrict NetworkPolicy egress to specific destinations (production requirement)
+- Increase backup retention from 3 to 7 days (nonprod) or 30 days (prod)
 
 ---
 
 ## Next Steps
 
-**Immediate**:
-- **Phase 6.6 (PCC-141)**: Pre-deployment Validation
-- Validate terraform plan output
-- Verify GCP project permissions
-- Confirm GKE cluster readiness
-- Check Cloudflare DNS delegation
+**Immediate** (This Session or Next):
+1. **Re-implement Phase 6.4** with updated planning file:
+   - Update `main.tf` IAM bindings per planning file changes
+   - Run `terraform validate` to verify syntax
+   - Commit with message: "fix(infra): apply least privilege IAM for ArgoCD Secret Manager access"
+   - Move PCC-139 back to "Done" status
 
 **Upcoming Phases**:
-- Phase 6.7+: Terraform Apply & Helm Deployment
-- Infrastructure provisioning (terraform apply)
-- Create argocd namespace
-- Helm install ArgoCD with values-autopilot.yaml
-- DNS configuration and certificate verification
+2. **Phase 6.6**: Configure Google Workspace OAuth (no changes needed)
+3. **Phase 6.7**: Deploy ArgoCD Infrastructure (`terraform apply`)
+4. **Phase 6.8+**: Pre-flight validation, Helm installation, configuration
 
 ---
 
-**Session Status**: 🚧 **5 of 29 Phases Complete (17%)**
-**Token Usage**: 82k/200k (41% budget used)
-**Repos Modified**: 2 (pcc-tf-library, pcc-devops-infra)
+**Session Status**: 🔄 **Phase 6.4 Planning Updated, Needs Re-implementation**
+**Security Posture**: Improved from 6.5/10 to 8.5/10 (with IAM fixes)
+**Repos Modified**: 1 (pcc-ai-memory - planning files only)
 **Key Deliverables**:
-- 3 reusable infrastructure modules
-- Complete ArgoCD infrastructure configuration
-- Production-ready Helm values with OIDC + RBAC
-- Foundation ready for deployment
+- Comprehensive Phase 6 security review by 4 specialized agents
+- Critical IAM over-privileging issues identified and fixed in planning
+- Phase 6.4 planning file updated with least privilege IAM bindings

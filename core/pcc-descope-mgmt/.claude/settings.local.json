@@ -2,7 +2,16 @@
   "permissions": {
     "allow": [
       "Skill(cc-unleashed:write-plan)",
-      "Skill(cc-unleashed:brainstorming)"
+      "Skill(cc-unleashed:brainstorming)",
+      "SlashCommand(/cc-unleashed:plan-new)",
+      "Bash(git rev-parse:*)",
+      "Bash(mkdir:*)",
+      "Skill(cc-unleashed:execute-plan-with-subagents)",
+      "Bash(python3:*)",
+      "Bash(descope-mgmt:*)",
+      "Bash(lint-imports)",
+      "Bash(cat:*)",
+      "Bash(python:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

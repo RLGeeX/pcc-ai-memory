@@ -39,17 +39,56 @@ Document the process for creating Google Workspace OAuth 2.0 credentials that Ar
    - **CRITICAL**: This URI must exactly match the domain from Phase 6.5 dex.config
 6. Click **Create**
 
-### Step 3: Record Credentials
+### Step 3: Record Credentials and Store in Secret Manager
 
 After clicking Create, Google will display:
 - **Client ID**: A long string like `123456789-abc...xyz.apps.googleusercontent.com`
 - **Client Secret**: A string like `GOCSPX-abc...xyz`
 
-**IMPORTANT**: Copy these credentials immediately and store securely. You will need them in Phase 6.12.
+**IMPORTANT**: Copy these credentials immediately and store securely in Secret Manager.
 
-Create a temporary secure note:
+**Store in Secret Manager (RECOMMENDED):**
 ```bash
-# Store credentials temporarily (local file, NOT committed to Git)
+# Set credentials (paste the actual values from Google Console)
+CLIENT_ID="<paste-client-id-here>"
+CLIENT_SECRET="<paste-client-secret-here>"
+
+# Store OAuth Client ID in Secret Manager
+echo -n "${CLIENT_ID}" | \
+  gcloud secrets versions add argocd-oauth-client-id \
+    --project=pcc-prj-devops-nonprod \
+    --data-file=-
+
+# Store OAuth Client Secret in Secret Manager
+echo -n "${CLIENT_SECRET}" | \
+  gcloud secrets versions add argocd-oauth-client-secret \
+    --project=pcc-prj-devops-nonprod \
+    --data-file=-
+
+# Clear variables from memory
+unset CLIENT_ID CLIENT_SECRET
+
+# Verify secrets were created
+gcloud secrets describe argocd-oauth-client-id \
+  --project=pcc-prj-devops-nonprod \
+  --format="value(name)"
+
+gcloud secrets describe argocd-oauth-client-secret \
+  --project=pcc-prj-devops-nonprod \
+  --format="value(name)"
+```
+
+**Expected Output:**
+```
+Created version [1] of the secret [argocd-oauth-client-id]
+Created version [1] of the secret [argocd-oauth-client-secret]
+```
+
+**Note:** The Secret Manager resources were created by Terraform in Phase 6.7. This step just populates the secret values.
+
+**Alternative (NOT RECOMMENDED - For reference only):**
+```bash
+# If you need a temporary local copy (NOT recommended, use Secret Manager instead)
 cat > /tmp/argocd-oauth-creds.txt <<EOF
 # ArgoCD NonProd Google OAuth Credentials
 # Created: $(date)
@@ -125,7 +164,8 @@ Store these in Secret Manager or pass directly to kubectl during Phase 6.12.
 - ✅ OAuth client ID created with correct name
 - ✅ Redirect URI exactly matches: `https://argocd.nonprod.pcconnect.ai/api/dex/callback`
 - ✅ Client ID and Client Secret recorded securely
-- ✅ Credentials stored in temporary secure location for Phase 6.12
+- ✅ **Credentials stored in Secret Manager** (`argocd-oauth-client-id` and `argocd-oauth-client-secret`)
+- ✅ Secret Manager versions verified (version 1 created)
 - ✅ hostedDomains verified to match Google Workspace domain
 
 ## HALT Conditions
@@ -151,10 +191,12 @@ Proceed to **Phase 6.7**: Deploy ArgoCD Infrastructure (WARP execution begins)
 
 ## Notes
 
-- These credentials will be used in Phase 6.12 to populate argocd-secret ConfigMap
+- **Credentials stored in Secret Manager** for security, audit trail, and rotation
+- These credentials will be fetched from Secret Manager in Phase 6.12 and populated into K8s secret
 - Google Workspace Groups (gcp-admins, gcp-devops, etc.) must exist before Phase 6.17
 - OAuth flow: User clicks "Login with Google" → Google auth → Dex validates → ArgoCD RBAC applied
 - If redirect URI changes (domain change), you MUST update OAuth client settings and Phase 6.5 dex.config
 - Internal OAuth consent screen = only @pcconnect.ai users can authenticate
-- This phase is documentation/preparation only - NO actual deployment or code changes
-- Credentials are NOT stored in Phase 6.5 values file (security risk) - stored in K8s secret in Phase 6.12
+- Secret Manager provides automatic encryption, versioning, and audit logging
+- Credentials rotation: Create new OAuth client in Google Console → Add new version to Secret Manager → Update K8s secret (Phase 6.12) → Revoke old credentials
+- **Security**: Never commit OAuth credentials to Git or store in plaintext files

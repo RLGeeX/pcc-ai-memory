@@ -69,19 +69,33 @@ kubectl delete secret argocd-initial-admin-secret -n argocd
 
 **CRITICAL**: Only delete AFTER confirming Step 2 succeeded.
 
-### Step 5: Update ArgoCD Secret with Google OAuth Credentials
+### Step 5: Update ArgoCD Secret with Google OAuth Credentials from Secret Manager
 
-Retrieve credentials from Phase 6.6:
+**Fetch OAuth credentials from Secret Manager:**
 ```bash
-# If stored in temp file from Phase 6.6
-source /tmp/argocd-oauth-creds.txt
+# Retrieve credentials from Secret Manager (populated in Phase 6.6)
+CLIENT_ID=$(gcloud secrets versions access latest \
+  --secret=argocd-oauth-client-id \
+  --project=pcc-prj-devops-nonprod)
 
-# Or manually set:
-# CLIENT_ID="<your-client-id>.apps.googleusercontent.com"
-# CLIENT_SECRET="<your-client-secret>"
+CLIENT_SECRET=$(gcloud secrets versions access latest \
+  --secret=argocd-oauth-client-secret \
+  --project=pcc-prj-devops-nonprod)
+
+# Verify credentials were retrieved
+echo "Client ID length: ${#CLIENT_ID} chars"
+echo "Client Secret length: ${#CLIENT_SECRET} chars"
 ```
 
-Patch the argocd-secret ConfigMap:
+**Expected:**
+```
+Client ID length: 72 chars (typical for Google OAuth)
+Client Secret length: 35 chars (typical GOCSPX- format)
+```
+
+**HALT if**: Either value is empty or Secret Manager access fails
+
+**Patch the argocd-secret:**
 ```bash
 kubectl patch secret argocd-secret -n argocd \
   --type='json' \
@@ -89,6 +103,9 @@ kubectl patch secret argocd-secret -n argocd \
     {\"op\": \"add\", \"path\": \"/data/dex.google.clientID\", \"value\": \"$(echo -n ${CLIENT_ID} | base64 -w0)\"},
     {\"op\": \"add\", \"path\": \"/data/dex.google.clientSecret\", \"value\": \"$(echo -n ${CLIENT_SECRET} | base64 -w0)\"}
   ]"
+
+# Clear variables from memory
+unset CLIENT_ID CLIENT_SECRET
 ```
 
 **Expected**: `secret/argocd-secret patched`
@@ -120,7 +137,8 @@ kubectl exec -n argocd deployment/argocd-server -- \
 - ✅ Admin password extracted successfully
 - ✅ Password stored in Secret Manager (us-east4)
 - ✅ K8s argocd-initial-admin-secret deleted
-- ✅ Google OAuth clientID and clientSecret added to argocd-secret
+- ✅ **Google OAuth clientID and clientSecret fetched from Secret Manager**
+- ✅ OAuth credentials added to argocd-secret K8s secret
 - ✅ Dex restarted and healthy
 - ✅ ArgoCD settings validation passes
 
@@ -129,13 +147,15 @@ kubectl exec -n argocd deployment/argocd-server -- \
 **HALT if**:
 - argocd-initial-admin-secret not found
 - Secret Manager creation fails (permission denied)
-- OAuth credentials not available from Phase 6.6
+- **OAuth credentials not found in Secret Manager** (Step 5 fails)
+- OAuth credential fetch returns empty values
 - Dex fails to restart after OAuth update
 
 **Resolution**:
 - Verify secret exists: `kubectl get secret -n argocd`
 - Check argocd-server SA IAM: `gcloud projects get-iam-policy pcc-prj-devops-nonprod --flatten="bindings[].members" --filter="bindings.members:argocd-server@"`
-- Retrieve OAuth creds from Google Cloud Console (Phase 6.6)
+- **Verify OAuth secrets in Secret Manager**: `gcloud secrets list --filter="name:argocd-oauth" --project=pcc-prj-devops-nonprod`
+- **Re-run Phase 6.6** if OAuth secrets are missing
 - Check Dex logs: `kubectl logs -n argocd deployment/argocd-dex-server`
 
 ## Next Phase
@@ -204,18 +224,29 @@ Before deleting K8s secret, verify:
 
 ### OAuth Credentials Handling
 
-**Storage Location**: K8s secret `argocd-secret` (NOT Secret Manager)
+**Storage Locations**:
+1. **Secret Manager** (source of truth): `argocd-oauth-client-id` and `argocd-oauth-client-secret`
+2. **K8s secret** (runtime): `argocd-secret` - Dex reads from here
 
-**Why?**: Dex reads from K8s secrets directly, expects local secrets
+**Why both?**
+- Secret Manager: Secure storage, audit trail, versioning, rotation support
+- K8s Secret: Dex requires local secret access (no Secret Manager integration)
+
+**Flow**: Secret Manager → (this step) → K8s Secret → Dex reads at runtime
 
 **Rotation Process**:
-1. Create new OAuth credentials in Google Cloud Console (Phase 6.6)
-2. Update `argocd-secret` via kubectl patch (Step 5)
-3. Restart Dex (Step 6)
-4. Test authentication (Phase 6.17)
-5. Revoke old credentials in Google Console
+1. Create new OAuth credentials in Google Cloud Console
+2. Store new credentials in Secret Manager: `gcloud secrets versions add argocd-oauth-client-id ...`
+3. Re-run Step 5 to fetch latest version and update K8s secret
+4. Restart Dex (Step 6)
+5. Test authentication (Phase 6.17)
+6. Revoke old credentials in Google Console
 
-**Do NOT store OAuth credentials in Secret Manager** - increases latency, Dex expects local secrets
+**Security Benefits**:
+- ✅ Credentials never in shell history (fetched from Secret Manager)
+- ✅ Audit trail of access in Cloud Logging
+- ✅ Automatic encryption at rest
+- ✅ Version control for rollback
 
 ### Access Control Best Practices
 
@@ -235,11 +266,13 @@ Before deleting K8s secret, verify:
 - **CRITICAL**: Delete K8s secret ONLY after Secret Manager storage confirmed
 - Admin password stored in Secret Manager is used for emergency access
 - Regular users authenticate via Google Workspace (configured in Phase 6.5)
-- OAuth clientID/clientSecret are stored in K8s secret (not Secret Manager)
+- **OAuth credentials**: Stored in Secret Manager (source of truth), fetched and copied to K8s secret for Dex runtime
+- **Security improvement**: OAuth credentials never touch shell history or temp files (fetched directly from Secret Manager)
 - Dex restart required to load new OAuth credentials
 - Secret creation runs from workstation (uses your gcloud credentials)
 - If Secret Manager creation fails, admin secret remains in K8s (can retry)
-- Clean up temp file after Step 5: `rm -f /tmp/argocd-oauth-creds.txt`
 - **Password rotation**: Use `gcloud secrets versions add` to create new version
+- **OAuth rotation**: Add new version to Secret Manager → re-run Step 5 → restart Dex
 - **Audit trail**: All Secret Manager access logged in Cloud Audit Logs
 - **Backup**: Secret Manager provides automatic versioning (can rollback)
+- **Terraform managed**: Secret Manager resources created in Phase 6.7, values populated manually
