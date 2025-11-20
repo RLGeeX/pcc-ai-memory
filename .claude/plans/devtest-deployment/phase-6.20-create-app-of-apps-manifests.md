@@ -11,15 +11,15 @@ Create ArgoCD "app-of-apps" pattern manifests to enable ArgoCD self-management, 
 
 - Phase 6.19 completed (Git credentials configured)
 - Phase 6.18 completed (NetworkPolicy manifests created)
-- Git repo: `pcc-app-argo-config` cloned locally
+- Git repo: `pcc-argocd-config-nonprod` cloned locally
 
 ## Detailed Steps
 
 ### Step 1: Create App-of-Apps Directory Structure
 
 ```bash
-mkdir -p ~/pcc/core/pcc-app-argo-config/argocd-nonprod/devtest/app-of-apps
-cd ~/pcc/core/pcc-app-argo-config/argocd-nonprod/devtest/app-of-apps
+mkdir -p ~/pcc/core/pcc-argocd-config-nonprod/devtest/app-of-apps
+cd ~/pcc/core/pcc-argocd-config-nonprod/devtest/app-of-apps
 ```
 
 ### Step 2: Create App-of-Apps Application Manifest
@@ -42,9 +42,9 @@ spec:
   project: default
 
   source:
-    repoURL: git@github.com:ORG/pcc-app-argo-config.git
+    repoURL: https://github.com/PORTCoCONNECT/pcc-argocd-config-nonprod.git
     targetRevision: main
-    path: argocd-nonprod/devtest/app-of-apps/apps
+    path: devtest/app-of-apps/apps
 
   destination:
     server: https://kubernetes.default.svc
@@ -99,9 +99,9 @@ spec:
   project: default
 
   source:
-    repoURL: git@github.com:ORG/pcc-app-argo-config.git
+    repoURL: https://github.com/PORTCoCONNECT/pcc-argocd-config-nonprod.git
     targetRevision: main
-    path: argocd-nonprod/devtest/network-policies
+    path: devtest/network-policies
 
   destination:
     server: https://kubernetes.default.svc
@@ -138,9 +138,9 @@ spec:
   project: default
 
   source:
-    repoURL: git@github.com:ORG/pcc-app-argo-config.git
+    repoURL: https://github.com/PORTCoCONNECT/pcc-argocd-config-nonprod.git
     targetRevision: main
-    path: argocd-nonprod/devtest/ingress
+    path: devtest/ingress
 
   destination:
     server: https://kubernetes.default.svc
@@ -209,10 +209,10 @@ app-of-apps/
 
 1. **Bootstrap**: Deploy root app manually (Phase 6.21):
    ```bash
-   kubectl apply -f root-app.yaml
+   kubectl apply -f devtest/app-of-apps/root-app.yaml
    ```
 
-2. **Self-Management**: Root app deploys all child apps automatically from `apps/` directory
+2. **Self-Management**: Root app deploys all child apps automatically from `devtest/app-of-apps/apps/` directory
 
 3. **Add New Apps**: Create new YAML in `apps/`, add to `kustomization.yaml`, commit to Git
 
@@ -292,8 +292,8 @@ git push origin main
 
 **Resolution**:
 - Check YAML syntax with `yamllint`
-- Verify `repoURL` matches your GitHub repository
-- Ensure `path` values point to correct directories
+- Verify `repoURL` is `https://github.com/PORTCoCONNECT/pcc-argocd-config-nonprod.git` (HTTPS format, not SSH)
+- Ensure `path` values point to correct directories (`devtest/app-of-apps/apps`, `devtest/network-policies`, `devtest/ingress`)
 - Check namespace is `argocd`
 - Verify git repo is clean: `git status`
 

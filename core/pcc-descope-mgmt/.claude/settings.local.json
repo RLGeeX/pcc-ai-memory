@@ -11,7 +11,9 @@
       "Bash(descope-mgmt:*)",
       "Bash(lint-imports)",
       "Bash(cat:*)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Skill(cc-unleashed:execute-plan)",
+      "Bash(mise run lint)"
     ]
   },
   "enableAllProjectMcpServers": true,

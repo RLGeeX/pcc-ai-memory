@@ -18,13 +18,13 @@ Wait for ArgoCD to automatically sync and deploy the hello-world application, de
 ### Step 1: Verify Git Changes Are Pushed
 
 ```bash
-cd ~/pcc/core/pcc-app-argo-config
+cd ~/pcc/core/pcc-argocd-config-nonprod
 
 # Verify clean working directory
 git status
 
 # Verify hello-world app manifest exists
-cat argocd-nonprod/devtest/app-of-apps/apps/hello-world.yaml
+cat devtest/app-of-apps/apps/hello-world.yaml
 ```
 
 **Expected**: Working directory clean, hello-world.yaml exists
@@ -144,9 +144,9 @@ Project:            default
 Server:             https://kubernetes.default.svc
 Namespace:          hello-world
 URL:                https://argocd.nonprod.pcconnect.ai/applications/hello-world-nonprod
-Repo:               git@github.com:ORG/pcc-app-argo-config.git
+Repo:               git@github.com:PORTCoCONNECT/pcc-argocd-config-nonprod.git
 Target:             main
-Path:               hello-world-nonprod
+Path:               hello-world
 SyncWindow:         Sync Allowed
 Sync Policy:        Automated (Prune)
 Sync Status:        Synced to main (xxxxx)

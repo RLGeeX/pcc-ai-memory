@@ -19,13 +19,13 @@ Deploy the root app-of-apps application to ArgoCD, triggering automatic deployme
 ### Step 1: Verify Git Repository Is Up-to-Date
 
 ```bash
-cd ~/pcc/core/pcc-app-argo-config
+cd ~/pcc/core/pcc-argocd-config-nonprod
 
 # Pull latest changes
 git pull origin main
 
 # Verify app-of-apps files exist
-ls -la argocd-nonprod/devtest/app-of-apps/
+ls -la devtest/app-of-apps/
 ```
 
 **Expected**: `root-app.yaml` and `apps/` directory exist
@@ -33,7 +33,7 @@ ls -la argocd-nonprod/devtest/app-of-apps/
 ### Step 2: Deploy Root Application
 
 ```bash
-kubectl apply -f argocd-nonprod/devtest/app-of-apps/root-app.yaml
+kubectl apply -f devtest/app-of-apps/root-app.yaml
 ```
 
 **Expected Output**:
@@ -191,7 +191,7 @@ kubectl get networkpolicy argocd-server -n argocd --show-labels
 - Test Git connection:
   ```bash
   kubectl exec -n argocd deployment/argocd-repo-server -- \
-    git ls-remote git@github.com:ORG/pcc-app-argo-config.git
+    git ls-remote https://github.com/PORTCoCONNECT/pcc-argocd-config-nonprod.git
   ```
 - Check application controller logs for sync errors:
   ```bash

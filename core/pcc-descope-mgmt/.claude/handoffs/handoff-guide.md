@@ -33,7 +33,9 @@ At session end (e.g., end of day), create a handoff file to document progress fo
 
 4. **Update Status Files**:
    - Summarize in local `@.claude/status/brief.md` (overwrite from `@.claude/status/brief-template.md`)
-   - Append to local `@.claude/status/current-progress.md` for personal history
+   - Append to local `@.claude/status/current-progress.md` (recent 2-3 weeks only)
+   - Update `@.claude/status/README.md` if needed (current status, metrics)
+   - Archive older content to `@.claude/status/archives/` at phase completion (see `@.claude/status/ARCHIVING.md`)
    - These files remain local, never committed
 
 ## Resuming a Session
@@ -44,8 +46,10 @@ At session start (e.g., next morning):
    - Example: `@.claude/handoffs/Claude-2025-10-15-19-09.md` or `@.claude/handoffs/Claude-2025-10-15-19-09-v2.md`
 
 2. **Review Context**:
+   - **Start here:** Read `@.claude/status/README.md` for navigation hub and current status
    - Read the latest handoff file for completed tasks, pending issues, and next steps
-   - Cross-reference with `@.claude/status/brief.md` and `@.claude/status/current-progress.md`
+   - Cross-reference with `@.claude/status/brief.md` (current session) and `@.claude/status/current-progress.md` (recent 2-3 weeks)
+   - For historical context, see `@.claude/status/archives/` (linked from README.md)
 
 3. **Use in Claude Code**:
    - Reference the handoff in prompts:  

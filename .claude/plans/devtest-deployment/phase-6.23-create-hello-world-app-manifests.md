@@ -10,15 +10,15 @@ Create simple hello-world application manifests to demonstrate ArgoCD's ability 
 ## Prerequisites
 
 - Phase 6.22 completed (NetworkPolicies validated)
-- Git repo: `pcc-app-argo-config` cloned locally
+- Git repo: `pcc-argocd-config-nonprod` cloned locally
 
 ## Detailed Steps
 
 ### Step 1: Create Hello-World Directory Structure
 
 ```bash
-mkdir -p ~/pcc/core/pcc-app-argo-config/hello-world-nonprod
-cd ~/pcc/core/pcc-app-argo-config/hello-world-nonprod
+mkdir -p ~/pcc/core/pcc-argocd-config-nonprod/hello-world
+cd ~/pcc/core/pcc-argocd-config-nonprod/hello-world
 ```
 
 ### Step 2: Create Namespace Manifest
@@ -166,7 +166,7 @@ commonLabels:
 ### Step 6: Create ArgoCD Application Manifest
 
 ```bash
-cd ~/pcc/core/pcc-app-argo-config/argocd-nonprod/devtest/app-of-apps/apps
+cd ~/pcc/core/pcc-argocd-config-nonprod/devtest/app-of-apps/apps
 ```
 
 Create file: `hello-world.yaml`
@@ -187,9 +187,9 @@ spec:
   project: default
 
   source:
-    repoURL: git@github.com:ORG/pcc-app-argo-config.git
+    repoURL: https://github.com/PORTCoCONNECT/pcc-argocd-config-nonprod.git
     targetRevision: main
-    path: hello-world-nonprod
+    path: hello-world
 
   destination:
     server: https://kubernetes.default.svc
@@ -219,7 +219,7 @@ spec:
 ### Step 7: Update Kustomization to Include Hello-World
 
 ```bash
-cd ~/pcc/core/pcc-app-argo-config/argocd-nonprod/devtest/app-of-apps/apps
+cd ~/pcc/core/pcc-argocd-config-nonprod/devtest/app-of-apps/apps
 ```
 
 Edit file: `kustomization.yaml`
@@ -247,11 +247,11 @@ commonLabels:
 
 ```bash
 # Validate hello-world resources
-cd ~/pcc/core/pcc-app-argo-config/hello-world-nonprod
+cd ~/pcc/core/pcc-argocd-config-nonprod/hello-world
 kubectl apply --dry-run=client -k .
 
 # Validate ArgoCD application
-cd ~/pcc/core/pcc-app-argo-config/argocd-nonprod/devtest/app-of-apps/apps
+cd ~/pcc/core/pcc-argocd-config-nonprod/devtest/app-of-apps/apps
 kubectl apply --dry-run=client -f hello-world.yaml
 
 # Expected: All resources validated
@@ -260,7 +260,7 @@ kubectl apply --dry-run=client -f hello-world.yaml
 ### Step 9: Git Commit
 
 ```bash
-cd ~/pcc/core/pcc-app-argo-config
+cd ~/pcc/core/pcc-argocd-config-nonprod
 
 git add .
 git commit -m "feat(apps): add hello-world sample application

@@ -1,196 +1,262 @@
 # Phase 6.19: Configure Git Credentials
 
 **Tool**: [WARP] Partner Execution
-**Estimated Duration**: 15 minutes
+**Estimated Duration**: 20 minutes
 
 ## Purpose
 
-Configure Git repository credentials in ArgoCD to enable syncing from private GitHub repositories, using either SSH key or Personal Access Token (PAT) method.
+Create a dedicated nonprod ArgoCD configuration repository and configure Git credentials in ArgoCD to enable syncing from private GitHub repositories using Personal Access Token (PAT) method.
 
 ## Prerequisites
 
 - Phase 6.18 completed (NetworkPolicy manifests created)
 - Phase 6.17 completed (Google Workspace RBAC validated)
-- GitHub account with access to `pcc-app-argo-config` repository
+- GitHub account with admin access to create new repositories
 - ArgoCD UI accessible
 
 ## Detailed Steps
 
-### Method A: SSH Key (Recommended)
+### Step 1: Create GitHub Repository
 
-#### Step 1: Generate SSH Key Pair
+1. Navigate to GitHub: `https://github.com/PORTCoCONNECT`
+2. Click **New repository**
+3. **Repository name**: `pcc-argocd-config-nonprod`
+4. **Description**: `GitOps configuration for ArgoCD testing cluster (pcc-gke-devops-nonprod)`
+5. **Visibility**: Private
+6. **Initialize**: Do NOT check "Add a README file" (we'll push existing content)
+7. Click **Create repository**
+
+### Step 2: Initialize Local Repository
 
 ```bash
-# Generate ED25519 key (more secure than RSA)
-ssh-keygen -t ed25519 -C "argocd-nonprod@pcconnect.ai" -f ~/.ssh/argocd-nonprod-ed25519 -N ""
+cd ~/pcc/core/
 
-# Display public key
-cat ~/.ssh/argocd-nonprod-ed25519.pub
+# Create new repo directory
+mkdir pcc-argocd-config-nonprod
+cd pcc-argocd-config-nonprod
+
+# Initialize Git
+git init
+git remote add origin git@github.com:PORTCoCONNECT/pcc-argocd-config-nonprod.git
+
+# Copy current nonprod content from old repo
+cp -r ../pcc-app-argo-config/argocd-nonprod/devtest .
+
+# Create README
+cat > README.md << 'EOF'
+# PCC ArgoCD Config - NonProd Testing Cluster
+
+GitOps configuration for the ArgoCD testing cluster (`pcc-gke-devops-nonprod`).
+
+**Purpose**: Testing ArgoCD and GKE upgrades only.
+
+**Production configs**: See `pcc-app-argo-config` repo (future).
+
+## Structure
+
+- `devtest/` - DevTest environment configs
+  - `ingress/` - Ingress and BackendConfig manifests
+  - `network-policies/` - NetworkPolicy manifests
+  - `app-of-apps/` - App-of-apps pattern (Phase 6.20)
+
+## Usage
+
+This repository is synced by ArgoCD running on `pcc-gke-devops-nonprod` cluster.
+
+Changes to manifests trigger automatic sync within 3 minutes.
+EOF
+
+# Create .gitignore
+cat > .gitignore << 'EOF'
+# Terraform
+*.tfstate
+*.tfstate.backup
+.terraform/
+*.tfvars
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+EOF
+
+# Initial commit
+git add .
+git commit -m "feat: initialize nonprod ArgoCD config repo
+
+- Extracted from pcc-app-argo-config for clean separation
+- Contains Ingress and NetworkPolicies for testing cluster
+- Dedicated to pcc-gke-devops-nonprod cluster only"
+
+# Push to GitHub
+git push -u origin main
 ```
 
-**Expected**: Public key starting with `ssh-ed25519 AAAA...`
+**Expected Output**: Repository pushed successfully to GitHub
 
-#### Step 2: Add Public Key to GitHub
+### Step 3: Create GitHub Personal Access Token
 
-1. Navigate to GitHub repository: `https://github.com/ORG/pcc-app-argo-config`
-2. Go to **Settings → Deploy keys**
-3. Click **Add deploy key**
-4. **Title**: `ArgoCD NonProd (DevTest)`
-5. **Key**: Paste public key from Step 1
-6. **Allow write access**: Leave UNCHECKED (read-only)
-7. Click **Add key**
+1. Navigate to GitHub: `https://github.com/settings/tokens`
+2. Click **Generate new token → Generate new token (classic)**
+3. **Note**: `ArgoCD NonProd Testing Cluster`
+4. **Expiration**: 90 days
+5. **Select scopes**:
+   - ✅ `repo` (Full control of private repositories)
+     - This grants: `repo:status`, `repo_deployment`, `public_repo`, `repo:invite`, `security_events`
+6. Click **Generate token**
+7. **COPY TOKEN IMMEDIATELY** (shown only once)
+   - Format: `ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
 
-#### Step 3: Add Private Key to ArgoCD via UI
+**IMPORTANT**: Save token temporarily (will be stored in Secret Manager in next step)
 
-1. Log into ArgoCD UI: `https://argocd.nonprod.pcconnect.ai`
-2. Navigate to **Settings → Repositories**
-3. Click **Connect Repo**
-4. Select **VIA SSH**
-5. Fill in details:
-   - **Repository URL**: `git@github.com:ORG/pcc-app-argo-config.git`
-   - **SSH private key**: Paste contents of `~/.ssh/argocd-nonprod-ed25519`
-   - **Skip server verification**: Leave UNCHECKED
-6. Click **Connect**
-
-**Expected**: Connection status shows "Successful"
-
-#### Step 4: Verify Repository Connection
+### Step 4: Store PAT in Secret Manager
 
 ```bash
-# Get admin password if using CLI
-ADMIN_PASSWORD=$(gcloud secrets versions access latest --secret=argocd-admin-password)
+# Set variables
+PROJECT_ID="pcc-prj-devops-nonprod"
+PAT="ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"  # Replace with your actual token
 
-# Login via CLI
+# Create secret for GitHub PAT
+echo -n "${PAT}" | gcloud secrets create argocd-github-pat \
+  --project=${PROJECT_ID} \
+  --replication-policy="user-managed" \
+  --locations="us-east4" \
+  --data-file=-
+
+# Grant ArgoCD service accounts access
+gcloud secrets add-iam-policy-binding argocd-github-pat \
+  --project=${PROJECT_ID} \
+  --member="serviceAccount:argocd-server@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --role="roles/secretmanager.secretAccessor"
+
+gcloud secrets add-iam-policy-binding argocd-github-pat \
+  --project=${PROJECT_ID} \
+  --member="serviceAccount:argocd-repo-server@${PROJECT_ID}.iam.gserviceaccount.com" \
+  --role="roles/secretmanager.secretAccessor"
+
+# Verify secret created
+gcloud secrets describe argocd-github-pat --project=${PROJECT_ID}
+```
+
+**Expected Output**: Secret created with user-managed replication in us-east4
+
+### Step 5: Add Repository to ArgoCD via CLI
+
+```bash
+# Retrieve PAT from Secret Manager
+PAT=$(gcloud secrets versions access latest \
+  --secret=argocd-github-pat \
+  --project=${PROJECT_ID})
+
+# Get ArgoCD admin password
+ADMIN_PASSWORD=$(gcloud secrets versions access latest \
+  --secret=argocd-admin-password \
+  --project=${PROJECT_ID})
+
+# Login to ArgoCD CLI
 argocd login argocd.nonprod.pcconnect.ai \
   --username admin \
-  --password "${ADMIN_PASSWORD}"
+  --password "${ADMIN_PASSWORD}" \
+  --grpc-web
 
+# Add repository using HTTPS + PAT
+argocd repo add https://github.com/PORTCoCONNECT/pcc-argocd-config-nonprod.git \
+  --username git \
+  --password "${PAT}" \
+  --name pcc-argocd-config-nonprod
+```
+
+**Expected Output**:
+```
+Repository 'https://github.com/PORTCoCONNECT/pcc-argocd-config-nonprod.git' added
+```
+
+### Step 6: Verify Repository Connection
+
+```bash
 # List repositories
 argocd repo list
 ```
 
-**Expected**: Repository shows CONNECTION STATUS = "Successful"
-
-**Note**: Retrieves password from Secret Manager using your workstation gcloud credentials.
-
-### Method B: Personal Access Token (PAT) - Alternative
-
-#### Step 1: Create GitHub PAT
-
-1. Navigate to GitHub: **Settings → Developer settings → Personal access tokens → Tokens (classic)**
-2. Click **Generate new token (classic)**
-3. **Note**: `ArgoCD NonProd (DevTest)`
-4. **Expiration**: 90 days (or custom)
-5. **Scopes**:
-   - ✅ `repo` (full control of private repositories)
-6. Click **Generate token**
-7. **CRITICAL**: Copy token immediately (only shown once)
-
-Example token format: `ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
-
-#### Step 2: Store Token in Secret Manager
-
-```bash
-# Store token temporarily
-export GITHUB_PAT="ghp_YOUR_TOKEN_HERE"
-
-# Check if secret exists, create or add version accordingly
-if gcloud secrets describe github-argocd-pat --project=pcc-prj-devops-nonprod >/dev/null 2>&1; then
-  # Secret exists, add new version
-  echo -n "${GITHUB_PAT}" | gcloud secrets versions add github-argocd-pat \
-    --data-file=-
-else
-  # Secret doesn't exist, create it
-  echo -n "${GITHUB_PAT}" | gcloud secrets create github-argocd-pat \
-    --data-file=- \
-    --replication-policy=user-managed \
-    --locations=us-east4 \
-    --labels=environment=nonprod,managed-by=manual
-fi
-
-# Clear token from shell
-unset GITHUB_PAT
+**Expected Output**:
+```
+TYPE  NAME                         REPO                                                                   INSECURE  OCI    LFS    CREDS  STATUS      MESSAGE  PROJECT
+git   pcc-argocd-config-nonprod    https://github.com/PORTCoCONNECT/pcc-argocd-config-nonprod.git         false     false  false  true   Successful           default
 ```
 
-**Expected**: Either `Created secret [github-argocd-pat]` or `Created version [1] of the secret [github-argocd-pat]`
+**Connection status**: "Successful" indicates ArgoCD can access repository
 
-**Note**: Runs from workstation using your gcloud credentials (not Workload Identity). This makes the step idempotent for re-runs.
-
-#### Step 3: Add Repository via UI with HTTPS
-
-1. Log into ArgoCD UI: `https://argocd.nonprod.pcconnect.ai`
-2. Navigate to **Settings → Repositories**
-3. Click **Connect Repo**
-4. Select **VIA HTTPS**
-5. Fill in details:
-   - **Repository URL**: `https://github.com/ORG/pcc-app-argo-config.git`
-   - **Username**: GitHub username
-   - **Password**: Paste PAT from Step 1
-6. Click **Connect**
-
-**Expected**: Connection status shows "Successful"
-
-### Step 5: Test Repository Access
+### Step 7: Test Repository Access
 
 ```bash
-# Via CLI
-argocd repo get git@github.com:ORG/pcc-app-argo-config.git  # If SSH
-# OR
-argocd repo get https://github.com/ORG/pcc-app-argo-config.git  # If HTTPS
+# Get repository details
+argocd repo get https://github.com/PORTCoCONNECT/pcc-argocd-config-nonprod.git
 ```
 
 **Expected**: Shows repository details with CONNECTION STATUS = "Successful"
 
-### Step 6: Verify ArgoCD Can List Branches
+### Step 8: Verify ArgoCD Can Clone Repository
 
 ```bash
-# This validates read access to the repository
-argocd repo get git@github.com:ORG/pcc-app-argo-config.git --show-urls
+# Trigger a test sync (validates clone operation)
+# This will be used in Phase 6.21 when we deploy app-of-apps
+argocd repo get https://github.com/PORTCoCONNECT/pcc-argocd-config-nonprod.git --refresh
 ```
 
-**Expected**: Shows available branches (main, develop, etc.)
+**Expected**: Repository refreshes successfully without errors
 
-### Step 7: Clean Up Local Keys (SSH Method Only)
-
-```bash
-# Securely delete local private key (now stored in ArgoCD)
-shred -u ~/.ssh/argocd-nonprod-ed25519
-
-# Keep public key for reference
-# Do NOT delete: ~/.ssh/argocd-nonprod-ed25519.pub
-```
+**Note**: ArgoCD clones the repository using HTTPS with PAT credentials
 
 ## Success Criteria
 
-- ✅ SSH key generated (Method A) OR GitHub PAT created (Method B)
-- ✅ Public key added to GitHub deploy keys (Method A) OR PAT stored in Secret Manager (Method B)
+- ✅ GitHub repository `pcc-argocd-config-nonprod` created
+- ✅ Local repository initialized and content pushed to GitHub
+- ✅ GitHub PAT created with `repo` scope
+- ✅ PAT stored in Secret Manager (`argocd-github-pat`)
+- ✅ ArgoCD service accounts granted secretAccessor role
 - ✅ Repository added to ArgoCD successfully
 - ✅ Connection status shows "Successful"
-- ✅ ArgoCD can list repository branches
-- ✅ Local private key deleted (Method A)
+- ✅ ArgoCD can clone/refresh repository
 
 ## HALT Conditions
 
 **HALT if**:
-- Cannot generate SSH key
-- GitHub deploy key addition fails (insufficient permissions)
+- Cannot create GitHub repository (insufficient permissions)
+- Cannot push to GitHub (authentication issues)
+- Cannot create GitHub PAT (insufficient permissions)
+- PAT secret creation in Secret Manager fails
 - ArgoCD repository connection fails
 - Connection status shows error
-- Cannot list repository branches
+- Cannot refresh repository
 
 **Resolution**:
-- **SSH method**: Verify SSH key format (ED25519 or RSA)
-- **SSH method**: Check GitHub deploy key has been added
-- **SSH method**: Verify repository URL format: `git@github.com:ORG/REPO.git`
-- **PAT method**: Verify PAT has `repo` scope
-- **PAT method**: Check PAT has not expired
-- **PAT method**: Verify repository URL format: `https://github.com/ORG/REPO.git`
-- Check ArgoCD logs: `kubectl logs -n argocd deployment/argocd-repo-server`
-- Test Git access manually:
+- **GitHub repo**: Verify organization admin permissions
+- **Git push**: Check Git credentials: `git config --list | grep user`
+- **PAT creation**: Verify account has permissions to create PATs
+- **PAT scope**: Ensure `repo` scope is selected (read/write for private repos)
+- **Secret Manager**: Verify project ID is correct: `pcc-prj-devops-nonprod`
+- **IAM**: Verify ArgoCD service accounts exist:
   ```bash
-  GIT_SSH_COMMAND="ssh -i ~/.ssh/argocd-nonprod-ed25519" git ls-remote git@github.com:ORG/pcc-app-argo-config.git
+  gcloud iam service-accounts list --project=pcc-prj-devops-nonprod | grep argocd
   ```
-- Verify network connectivity: `kubectl exec -n argocd deployment/argocd-repo-server -- curl -I https://github.com`
+- **Repository URL**: Must use HTTPS format: `https://github.com/PORTCoCONNECT/pcc-argocd-config-nonprod.git`
+- Check ArgoCD logs for authentication errors:
+  ```bash
+  kubectl logs -n argocd deployment/argocd-repo-server --tail=50 | grep -i auth
+  ```
+- Test PAT manually:
+  ```bash
+  PAT=$(gcloud secrets versions access latest --secret=argocd-github-pat)
+  curl -H "Authorization: token ${PAT}" https://api.github.com/repos/PORTCoCONNECT/pcc-argocd-config-nonprod
+  ```
+  Expected: Repository JSON response (not 401/403 error)
+- Verify network connectivity:
+  ```bash
+  kubectl exec -n argocd deployment/argocd-repo-server -- curl -I https://github.com
+  ```
 
 ## Next Phase
 
@@ -198,18 +264,24 @@ Proceed to **Phase 6.20**: Create App-of-Apps Manifests
 
 ## Notes
 
-- **RECOMMENDATION**: Use SSH method (Method A) - more secure and no expiration
-- **PAT method**: Token expires (90 days default) - requires manual renewal
-- **SSH method**: Deploy keys are per-repository - need separate key for each repo
-- **PAT method**: Single token can access multiple repositories
-- GitHub deploy key is read-only by default (ArgoCD only needs read access)
-- ArgoCD stores credentials encrypted in K8s secrets
-- Private key stored in ArgoCD secret: `argocd-repo-creds-XXXXXX`
-- Do NOT commit private keys or PATs to Git
-- SSH key uses ED25519 algorithm (more secure than RSA 2048)
-- If using PAT, rotate every 90 days (or use GitHub App for longer-lived tokens)
-- Repository connection is tested immediately when added
-- ArgoCD polls repository every 3 minutes (default) for changes
-- Multiple repositories can be added (one per app or shared)
-- For production, consider using GitHub App authentication (no expiration)
-- If connection fails, check repo-server logs for detailed error messages
+- **Repository Separation**: `pcc-argocd-config-nonprod` is dedicated to testing cluster only
+- **Future Production**: `pcc-app-argo-config` repo will be used for production ArgoCD cluster
+- **PAT Method**: Uses Personal Access Token with HTTPS (simpler than SSH, works across multiple repos)
+- **PAT Expiration**: GitHub PATs expire after 90 days, requiring manual rotation
+- **PAT Rotation**: Calendar reminder to rotate PAT before expiration:
+  1. Create new PAT in GitHub (Settings → Tokens)
+  2. Update Secret Manager: `gcloud secrets versions add argocd-github-pat --data-file=<(echo -n "NEW_PAT")`
+  3. ArgoCD automatically uses new version (no restart needed)
+  4. Delete old PAT from GitHub after validation
+- **Security**: PAT stored encrypted in Secret Manager, accessed via Workload Identity
+- **Multi-Repo Access**: Single PAT can access all PORTCoCONNECT repos (unlike SSH deploy keys which are per-repo)
+- **Do NOT commit**: PAT tokens to Git repositories or share publicly
+- **Repository connection**: Tested immediately when added
+- **Polling**: ArgoCD polls repository every 3 minutes (default) for changes
+- **Single Repository**: Only one repo needed for this testing cluster (all configs in one place)
+- **Future Enhancement**: Backlog item BL-004 created for GitHub App migration (no expiration, better audit logs)
+- **Troubleshooting**: Check repo-server logs for detailed error messages if connection fails
+- **Original repo**: `pcc-app-argo-config` will remain for future production use
+- **Content copied**: Ingress and NetworkPolicy manifests from original repo's `argocd-nonprod/devtest/` directory
+- **HTTPS vs SSH**: ArgoCD repo URL must use HTTPS format (`https://github.com/...`) not SSH (`git@github.com:...`)
+- **Username**: Use `git` as username when adding repository (GitHub standard for PAT authentication)
