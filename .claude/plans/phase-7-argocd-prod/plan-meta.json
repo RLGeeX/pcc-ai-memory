@@ -1,0 +1,100 @@
+{
+  "feature": "phase-7-argocd-prod",
+  "created": "2025-11-21T18:30:00Z",
+  "totalChunks": 24,
+  "currentChunk": 1,
+  "status": "pending",
+  "contextTokens": 12000,
+  "description": "Deploy ArgoCD to production GKE cluster (pcc-gke-devops-prod) with HA configuration, 14-day backups, resource quotas, and production hardening",
+
+  "phases": [
+    {
+      "name": "Infrastructure Foundation",
+      "chunks": [1, 2, 3, 4, 5],
+      "stories": ["STORY-701", "STORY-702"]
+    },
+    {
+      "name": "HA Installation",
+      "chunks": [6, 7, 8, 9, 10],
+      "stories": ["STORY-703", "STORY-704"]
+    },
+    {
+      "name": "Access & Security",
+      "chunks": [11, 12, 13, 14],
+      "stories": ["STORY-705", "STORY-706"]
+    },
+    {
+      "name": "GitOps Patterns",
+      "chunks": [15, 16, 17, 18, 19],
+      "stories": ["STORY-707", "STORY-708"]
+    },
+    {
+      "name": "Production Operations",
+      "chunks": [20, 21, 22, 23, 24],
+      "stories": ["STORY-709", "STORY-710"]
+    }
+  ],
+
+  "jiraTracking": {
+    "parentStory": "PCC-78",
+    "chunkToJiraKey": {
+      "1": "PCC-281",
+      "2": "PCC-282",
+      "3": "PCC-283",
+      "4": "PCC-284",
+      "5": "PCC-285",
+      "6": "PCC-286",
+      "7": "PCC-287",
+      "8": "PCC-288",
+      "9": "PCC-289",
+      "10": "PCC-290",
+      "11": "PCC-291",
+      "12": "PCC-292",
+      "13": "PCC-293",
+      "14": "PCC-294",
+      "15": "PCC-295",
+      "16": "PCC-296",
+      "17": "PCC-297",
+      "18": "PCC-298",
+      "19": "PCC-299",
+      "20": "PCC-300",
+      "21": "PCC-301",
+      "22": "PCC-302",
+      "23": "PCC-303",
+      "24": "PCC-304"
+    }
+  },
+
+  "executionConfig": {
+    "defaultMode": "auto-detect",
+    "chunkComplexity": [
+      {"chunk": 1, "complexity": "simple", "reason": "copy existing modules"},
+      {"chunk": 2, "complexity": "simple", "reason": "create new module from pattern"},
+      {"chunk": 3, "complexity": "simple", "reason": "directory setup"},
+      {"chunk": 4, "complexity": "medium", "reason": "module integration"},
+      {"chunk": 5, "complexity": "medium", "reason": "terraform apply (15-20 min provisioning)"},
+      {"chunk": 6, "complexity": "medium", "reason": "HA configuration with multi-replica"},
+      {"chunk": 7, "complexity": "simple", "reason": "resource configuration"},
+      {"chunk": 8, "complexity": "medium", "reason": "RBAC and ingress config"},
+      {"chunk": 9, "complexity": "simple", "reason": "validation script"},
+      {"chunk": 10, "complexity": "medium", "reason": "helm install (10-15 min)"},
+      {"chunk": 11, "complexity": "simple", "reason": "ingress and DNS"},
+      {"chunk": 12, "complexity": "simple", "reason": "cert validation"},
+      {"chunk": 13, "complexity": "medium", "reason": "OAuth configuration"},
+      {"chunk": 14, "complexity": "medium", "reason": "RBAC testing"},
+      {"chunk": 15, "complexity": "simple", "reason": "app-of-apps manifests"},
+      {"chunk": 16, "complexity": "simple", "reason": "NetworkPolicy manifests"},
+      {"chunk": 17, "complexity": "simple", "reason": "sample app deployment"},
+      {"chunk": 18, "complexity": "simple", "reason": "quota manifests"},
+      {"chunk": 19, "complexity": "medium", "reason": "monitoring setup"},
+      {"chunk": 20, "complexity": "medium", "reason": "Velero installation"},
+      {"chunk": 21, "complexity": "simple", "reason": "backup schedule"},
+      {"chunk": 22, "complexity": "medium", "reason": "backup testing"},
+      {"chunk": 23, "complexity": "simple", "reason": "documentation"},
+      {"chunk": 24, "complexity": "simple", "reason": "status update"}
+    ],
+    "reviewCheckpoints": [5, 10, 14, 19, 24],
+    "parallelizable": [[1, 2], [6, 7], [15, 16], [20, 21]],
+    "estimatedMinutes": 1440
+  }
+}

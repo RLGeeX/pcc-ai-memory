@@ -1,0 +1,52 @@
+{
+  "feature": "pcc-170-flow-management",
+  "created": "2025-12-01T19:00:00Z",
+  "totalChunks": 4,
+  "currentChunk": 1,
+  "status": "pending",
+  "contextTokens": 2000,
+  "description": "PCC-170: Flow Templates & Import/Export. Wire FlowManager to API, add flow export/import CLI commands with validation and backup support.",
+
+  "jiraTracking": {
+    "epicKey": "PCC-165",
+    "storyKey": "PCC-170",
+    "subTasks": [
+      {"key": "PCC-248", "chunk": "chunk-001-pcc-248-flow-templates.md", "summary": "Flow template system"},
+      {"key": "PCC-249", "chunk": "chunk-002-pcc-249-flow-sync.md", "summary": "Flow sync command"},
+      {"key": "PCC-250", "chunk": "chunk-003-pcc-250-flow-import-export.md", "summary": "Flow import/export"},
+      {"key": "PCC-251", "chunk": "chunk-004-pcc-251-flow-versioning.md", "summary": "Flow versioning & rollback"}
+    ]
+  },
+
+  "phases": [
+    {
+      "name": "FlowManager Integration",
+      "chunks": [1]
+    },
+    {
+      "name": "Flow Sync",
+      "chunks": [2]
+    },
+    {
+      "name": "Import/Export",
+      "chunks": [3]
+    },
+    {
+      "name": "Versioning & Rollback",
+      "chunks": [4]
+    }
+  ],
+
+  "executionConfig": {
+    "defaultMode": "automated",
+    "chunkComplexity": [
+      {"chunk": 1, "complexity": "simple", "reason": "wire existing API methods to FlowManager"},
+      {"chunk": 2, "complexity": "medium", "reason": "flow sync with dry-run and apply modes"},
+      {"chunk": 3, "complexity": "medium", "reason": "export/import commands with validation"},
+      {"chunk": 4, "complexity": "medium", "reason": "backup integration and rollback"}
+    ],
+    "reviewCheckpoints": [4],
+    "parallelizable": [],
+    "estimatedMinutes": 120
+  }
+}

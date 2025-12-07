@@ -1,170 +1,115 @@
 # Current Session Brief
 
-**Date**: 2025-11-20
-**Session Type**: Phase 6.19-6.22 ArgoCD GitOps Deployment
-**Status**: ✅ Phases 6.19-6.22 Complete - ArgoCD Self-Managing via GitOps
+**Date**: 2025-11-21
+**Session Type**: Phase 4 & Phase 7 Planning with Jira Integration
+**Status**: ✅ Complete - Ready for Execution
 
 ---
 
 ## Recent Updates
 
-### Session Focus: Phases 6.19-6.22 - GitOps Self-Management
+### Session Focus: Phase 4 & Phase 7 Implementation Plans
 
-**Phases Completed** (4 phases):
-- **Phase 6.19** (PCC-154): Configure Git credentials with PAT authentication
-- **Phase 6.20** (PCC-155): Create app-of-apps manifests (user executed)
-- **Phase 6.21** (PCC-156): Deploy app-of-apps, trigger GitOps sync
-- **Phase 6.22** (PCC-157): Validate NetworkPolicies applied and working
+**Plans Created** (2 phases):
+- **Phase 4**: GKE DevOps Prod Cluster - 12 micro-chunks, 960 minutes estimated
+- **Phase 7**: ArgoCD Production Deployment - 24 micro-chunks, 1440 minutes estimated
 
-**Status**: ✅ ArgoCD now fully self-managing via GitOps
+**Status**: ✅ Both plans complete with full Jira integration
 
 **Key Achievements**:
-1. ✅ **New Dedicated Repository**: `pcc-argocd-config-nonprod`
-   - Created GitHub repository for testing cluster
-   - Initialized with Ingress and NetworkPolicy manifests
-   - Clean separation from future production repo
+1. ✅ **Phase 4 Plan Created**: Production GKE Autopilot cluster deployment
+   - 12 micro-chunks (300-500 tokens, 2-3 tasks each)
+   - 4 logical phases: Configuration, Validation & Deployment, Feature Validation, Documentation
+   - Jira: 12 sub-tasks created (PCC-272 to PCC-280, PCC-305 to PCC-307)
+   - Parent story: PCC-121
+   - All assigned to Christine Fogarty with DevOps label
 
-2. ✅ **Git Authentication**: PAT-based HTTPS access
-   - Created GitHub Personal Access Token (90-day expiration)
-   - Stored PAT in Secret Manager (`argocd-github-pat`)
-   - ArgoCD successfully connected to repository
-   - Connection status: Successful
+2. ✅ **Phase 7 Plan Created**: ArgoCD production deployment with HA
+   - 24 micro-chunks (300-500 tokens, 2-3 tasks each)
+   - 5 logical phases: Infrastructure Foundation, HA Installation, Access & Security, GitOps Patterns, Production Operations
+   - Jira: 24 sub-tasks created (PCC-281 to PCC-304)
+   - Parent story: PCC-78
+   - All assigned to Christine Fogarty with DevOps label
 
-3. ✅ **App-of-Apps Deployed**: GitOps pattern active
-   - Root app: `argocd-nonprod-root` (Synced, Healthy)
-   - Child apps: `argocd-network-policies`, `argocd-ingress` (both Synced, Healthy)
-   - Self-healing enabled (prune=true, selfHeal=true)
-   - ArgoCD manages its own configuration from Git
+3. ✅ **Production Configuration Decisions Documented**:
+   - **NetworkPolicies**: Wide-open egress (egress: [{}]) - SAME as nonprod
+   - **RBAC**: policy.default: role:readonly workaround STAYS - NO BL-003 required for prod
+   - **Backups**: 14-day retention (vs 3-day nonprod)
+   - **HA**: Multi-replica (controller=2, repo=2, server=2, Redis HA with 3 sentinels)
+   - **Resource Quotas**: Required for production (argocd: 10 CPU/20Gi, default: 20 CPU/40Gi)
+   - **Deletion Protection**: True (cluster already has this from Phase 4)
 
-4. ✅ **NetworkPolicies Validated**: All components protected
-   - 6 NetworkPolicies deployed (server, controller, repo-server, dex, redis, external-dns)
-   - Wide-open egress confirmed (nonprod debugging)
-   - Dex can reach Google OAuth endpoints
-   - All pods running and healthy
+4. ✅ **Modern Planning Approach Applied**:
+   - Micro-chunks optimized for AI agent context windows (300-500 tokens)
+   - Agent assignments per task (terraform-specialist, k8s-architect, gitops-engineer, etc.)
+   - Parallelization identified (Phase 7: chunks 9-10, 15-16, 20-21 can run in parallel)
+   - Review checkpoints defined (Phase 4: after chunks 5, 7, 10, 12; Phase 7: after 5, 10, 14, 19, 24)
+   - Complexity ratings per chunk (simple/medium)
 
----
-
-### Previous Session: OAuth Authentication Fix
-
-**Issue**: Users unable to log in via Google OAuth, receiving "Error 400: invalid_scope" for `groups` scope
-
-**Root Cause**: 
-- Dex OIDC connector configured with `groups` scope in both `argocd-cm` and `argocd-rbac-cm`
-- Google OAuth doesn't support `groups` scope (only `openid`, `profile`, `email` are valid)
-- This blocked all OAuth login attempts
-
-**Fix Applied**:
-1. Removed `groups` scope from Dex connector configuration in `argocd-cm`
-2. Removed `scopes: '[groups]'` from `argocd-rbac-cm`
-3. Removed `groups: groups` claim mapping from Dex config
-4. Restarted Dex and ArgoCD server deployments
-
-**Result**: ✅ OAuth login now working, users can authenticate with Google Workspace accounts
-
-**Note**: Groups still not populated (expected). Backlog item BL-003 created for implementing Google Workspace Directory API integration to enable group-based RBAC.
+5. ✅ **Jira Integration Complete**:
+   - Phase 4: 100% coverage (12 of 12 sub-tasks created)
+   - Phase 7: 100% coverage (24 of 24 sub-tasks created)
+   - All sub-tasks properly linked to parent stories
+   - Plan-meta.json files updated with jiraTracking sections
+   - All chunk files updated with Jira keys
 
 ---
 
-### Previous Session: Phase 6.12-6.16 - ArgoCD Configuration & External Access
+## Production-Specific Details
 
-**Status**: Successfully completed ArgoCD secret management, DNS automation, and external HTTPS access with GCP Load Balancer.
+### Phase 7 Key Features
+- **Infrastructure**: 4 GCP service accounts, 4 Workload Identity bindings, GCS backup bucket (14-day lifecycle), managed SSL certificate
+- **HA Configuration**: Multi-replica deployment with pod anti-affinity, resource requests/limits, security contexts
+- **Backups**: Velero 5.0.0 with daily schedule (2 AM UTC), 14-day TTL, GCS backend
+- **Monitoring**: ServiceMonitor (3), PrometheusRule with 4 alerts, Grafana dashboards (14584, 14585)
+- **GitOps**: App-of-apps pattern, NetworkPolicies (wide-open egress), ResourceQuotas per namespace
+- **Disaster Recovery**: Runbook with 3 scenarios (RTO < 1 hour, RPO < 24 hours)
 
-**Phases Completed Today** (5 phases):
-- **Phase 6.12** (PCC-147): Extract admin password to Secret Manager, configure OAuth credentials in K8s
-- **Phase 6.13** (PCC-148): Configure Cloudflare API token in Secret Manager
-- **Phase 6.14** (PCC-149): Install ExternalDNS via Helm
-- **Phase 6.15** (PCC-150): Create Ingress & BackendConfig manifests (user executed)
-- **Phase 6.16** (PCC-151): Deploy Ingress, SSL certificate provisioned, ArgoCD accessible via HTTPS
-
-**ArgoCD Now Accessible**: https://argocd.nonprod.pcconnect.ai
-
----
-
-## Key Configuration Details
-
-### Phase 6.12: Secret Management
-- Admin password: Extracted from K8s, stored in Secret Manager (16 chars)
-- OAuth credentials: Client ID (73 chars) + Client Secret (35 chars) fetched from Secret Manager
-- OAuth credentials added to argocd-secret K8s secret for Dex runtime
-- K8s initial admin secret deleted for security
-- Dex restarted to pick up OAuth configuration
-
-### Phase 6.13: Cloudflare DNS Automation
-- Cloudflare API token created with DNS edit permissions (Zone: pcconnect.ai)
-- Token stored in Secret Manager (us-east4, 40 chars)
-- ExternalDNS SA granted secretAccessor role
-- Token environment variable secured
-
-### Phase 6.14: ExternalDNS Deployment
-- Helm chart v1.14.3, app v0.14.0
-- Cloudflare provider configured
-- Domain filter: pcconnect.ai
-- Policy: sync (create/update/delete DNS records)
-- TXT registry with ownership tracking (argocd-nonprod)
-- Workload Identity configured, pod running healthy
-
-### Phase 6.16: Ingress & Load Balancer
-- **Load Balancer IP**: 136.110.168.249
-- **DNS**: argocd.nonprod.pcconnect.ai → 136.110.168.249
-- **SSL Certificate**: ACTIVE (GCP-managed)
-- **Access**: HTTPS working (HTTP/2 200)
-- **Network Endpoint Groups**: Direct pod routing configured
-- **Health Checks**: Passing on `/healthz` endpoint
-- **ArgoCD Insecure Mode**: Enabled (required for upstream TLS termination)
-
----
-
-## Validation
-
-✅ All manifests validated with `kubectl apply --dry-run=client`
-✅ Kustomization updated to use newer `patches` syntax (deprecated warnings resolved)
-✅ YAML syntax validated
-
----
-
-## Previous Progress Summary
-
-### Phase 6.1-6.5: Infrastructure & Configuration - ✅ COMPLETE
-- Phase 6.1-6.3: Created 3 Terraform modules (service-account, workload-identity, managed-certificate)
-- Phase 6.4: ArgoCD infrastructure config with security hardening (PCC-139)
-- Phase 6.5: Helm values configuration for GKE Autopilot (PCC-140)
-
-### Phase 6.6-6.14: Deployment & Configuration - ✅ COMPLETE (User executed)
-- Phase 6.6: Google Workspace OAuth configuration
-- Phase 6.7: ArgoCD infrastructure deployed via Terraform
-- Phase 6.8-6.10: ArgoCD Helm installation and validation
-- Phase 6.11-6.14: Configuration and ExternalDNS setup
+### Phase 4 Simplification
+- No module creation (reuses existing pcc-tf-library/modules/gke-autopilot v0.1.0)
+- Faster execution than Phase 3 (12 chunks vs 12 subphases)
+- Production hardening: deletion_protection=true, STABLE release channel
+- Same features as nonprod: Autopilot, Connect Gateway, Workload Identity
 
 ---
 
 ## Next Steps
 
-**Phase 6.23**: Create Hello-World App Manifests
-- Create sample application for testing GitOps deployment
-- Validate CreateNamespace functionality
-- Test end-to-end application deployment via ArgoCD
+**Execute Phase 4** (when ready):
+```bash
+# Option 1: Execute chunks one at a time
+/cc-unleashed:plan-next
 
-**Phase 6.17**: Deferred - Google Workspace Groups RBAC (Blocked)
-- OAuth login working, but groups not populated (BL-003)
-- Email-based RBAC available as temporary workaround
-- Full group integration requires Google Workspace Directory API
+# Option 2: Auto-execute all remaining chunks
+/cc-unleashed:plan-execute
+
+# Check progress
+/cc-unleashed:plan-status
+```
+
+**Execute Phase 7** (after Phase 4 complete):
+- Same commands as Phase 4
+- Ensure pcc-gke-devops-prod cluster is healthy before starting
+
+**Track Progress**:
+- Jira: PCC-121 (Phase 4), PCC-78 (Phase 7)
+- Plans: `.claude/plans/phase-4-gke-devops-prod/`, `.claude/plans/phase-7-argocd-prod/`
 
 ---
 
-**Session Status**: ✅ **Phases 6.19-6.22 Complete - GitOps Self-Management Operational**
+## References
 
-**Jira Cards Completed**: 3 (PCC-154, PCC-156, PCC-157)
+**Plan Files**:
+- Phase 4: `.claude/plans/phase-4-gke-devops-prod/plan-meta.json` and chunks 001-012
+- Phase 7: `.claude/plans/phase-7-argocd-prod/plan-meta.json` and chunks 001-024
 
-**Key Deliverables**:
-- GitHub repository: `pcc-argocd-config-nonprod` (14 files, 354 lines)
-- PAT authentication: Stored in Secret Manager, connected successfully  
-- App-of-apps pattern: Root + 2 child apps (all Synced, Healthy)
-- NetworkPolicies: 6 policies deployed and validated
-- GitOps active: ArgoCD self-managing from Git
-- Self-healing enabled: Manual changes automatically reverted
+**Jira Cards**:
+- Phase 4: PCC-272 to PCC-280, PCC-305 to PCC-307 (parent: PCC-121)
+- Phase 7: PCC-281 to PCC-304 (parent: PCC-78)
 
-**Previous Sessions**:
-- Phase 6.18: NetworkPolicy manifests created (PCC-153)
-- Phases 6.12-6.16: ArgoCD deployment, external access, SSL
-- OAuth authentication fix: Removed invalid `groups` scope (BL-003)
-- ArgoCD accessible: https://argocd.nonprod.pcconnect.ai
+**Handoff**: `.claude/handoffs/Claude-2025-11-21-12-47.md`
+
+---
+
+**Session Duration**: ~3 hours
+**Completion Status**: ✅ Planning Complete - Ready for Execution

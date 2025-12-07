@@ -1,0 +1,104 @@
+{
+  "feature": "milestone-6-advanced-ops",
+  "created": "2025-12-01T16:00:00Z",
+  "totalChunks": 12,
+  "currentChunk": 4,
+  "status": "in-progress",
+  "contextTokens": 4800,
+  "description": "Phase 2 Milestone 6: Batch executor refactoring, tenant/flow delete commands with confirmations and backups, audit log CLI enhancements, and rate limit verification benchmarks",
+
+  "jira": {
+    "story": "PCC-171",
+    "subtasks": ["PCC-252", "PCC-253", "PCC-254", "PCC-255", "PCC-256"],
+    "epic": "PCC-165"
+  },
+
+  "phases": [
+    {
+      "name": "Batch Executor Refactoring",
+      "jiraSubtask": "PCC-252",
+      "chunks": [1, 2, 3],
+      "status": "complete"
+    },
+    {
+      "name": "Delete Commands",
+      "jiraSubtasks": ["PCC-253", "PCC-254"],
+      "chunks": [4, 5, 6, 7]
+    },
+    {
+      "name": "Audit Log Enhancements",
+      "jiraSubtask": "PCC-255",
+      "chunks": [8, 9, 10]
+    },
+    {
+      "name": "Rate Limit Verification",
+      "jiraSubtask": "PCC-256",
+      "chunks": [11, 12]
+    }
+  ],
+
+  "executionConfig": {
+    "defaultMode": "auto-detect",
+    "chunkComplexity": [
+      {"chunk": 1, "complexity": "medium", "reason": "New domain class with generics"},
+      {"chunk": 2, "complexity": "medium", "reason": "Progress callback integration"},
+      {"chunk": 3, "complexity": "complex", "reason": "Adaptive worker pool algorithm"},
+      {"chunk": 4, "complexity": "simple", "reason": "Manager method with existing patterns"},
+      {"chunk": 5, "complexity": "simple", "reason": "CLI command with existing patterns"},
+      {"chunk": 6, "complexity": "medium", "reason": "Dependency checks required"},
+      {"chunk": 7, "complexity": "simple", "reason": "CLI command with existing patterns"},
+      {"chunk": 8, "complexity": "simple", "reason": "Filter enhancements"},
+      {"chunk": 9, "complexity": "medium", "reason": "Multiple export formats"},
+      {"chunk": 10, "complexity": "medium", "reason": "Statistics calculations"},
+      {"chunk": 11, "complexity": "medium", "reason": "Performance benchmarks"},
+      {"chunk": 12, "complexity": "complex", "reason": "Adaptive tuning algorithm"}
+    ],
+    "reviewCheckpoints": [3, 7, 10, 12],
+    "parallelizable": [[4, 6], [5, 7], [8, 9]],
+    "estimatedMinutes": 180
+  },
+
+  "executionHistory": [
+    {
+      "chunk": 1,
+      "mode": "supervised",
+      "startedAt": "2025-12-01T16:00:00Z",
+      "completedAt": "2025-12-01T17:00:00Z",
+      "duration": 60,
+      "testsAdded": 14,
+      "testsPassing": true,
+      "commits": [
+        "c972be8 feat(types): add BatchResult and BatchItemResult types",
+        "e09d79e feat(domain): add BatchExecutor with result tracking"
+      ],
+      "issues": ["pre-existing test failure in test_client_factory.py unrelated to chunk"]
+    },
+    {
+      "chunk": 2,
+      "mode": "automated",
+      "startedAt": "2025-12-01T18:30:00Z",
+      "completedAt": "2025-12-01T18:45:00Z",
+      "duration": 15,
+      "testsAdded": 4,
+      "testsPassing": true,
+      "commits": [
+        "b652cc4 feat(batch): add progress callback and rate limiter to BatchExecutor"
+      ],
+      "issues": []
+    },
+    {
+      "chunk": 3,
+      "mode": "automated",
+      "startedAt": "2025-12-01T18:50:00Z",
+      "completedAt": "2025-12-01T19:10:00Z",
+      "duration": 20,
+      "testsAdded": 5,
+      "testsPassing": true,
+      "commits": [
+        "74e199f feat(batch): add concurrent execution with adaptive worker scaling"
+      ],
+      "issues": [],
+      "note": "Review checkpoint - Phase 1 (Batch Executor Refactoring) complete"
+    }
+  ]
+}

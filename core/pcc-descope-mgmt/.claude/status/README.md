@@ -9,21 +9,32 @@
 
 ## Current Status
 
-**Week:** 4 of 10 ✅ COMPLETE (40% complete)
-**Next:** Week 5 Planning (Advanced Features)
-**Current Focus:** Week 5 Scope Decision Pending
+**Phase:** User RBAC Management Complete
+**Progress:** All milestones complete, User/Role management implemented and verified
+**Current Focus:** Production ready
 
 **Metrics:**
-- Tests: 193 passing (189 passed, 4 skipped) - 94% coverage
-- Total commits: 49 conventional commits (all pushed to GitHub)
-- Git tags: `week1-complete`, `week2-complete`, `week4-complete` (all pushed)
-- Note: `week3-complete` tag needs to be created
+- Tests: 372 passing, 4 skipped - 90% coverage
+- Total commits: 74 conventional commits (through d4eae09)
+- Git tags: `week1-complete`, `week2-complete`, `week4-complete`
 
 **Jira Tracking:**
 - Epic: [PCC-165](https://portcoconnect.atlassian.net/browse/PCC-165) - pcc-descope-mgmt
-- 60 tickets: 1 Epic + 10 Stories + 49 Sub-tasks
-- 28 Done (40%), 32 To Do (60%)
-- All labeled `descope-management`, assigned to John Fogarty
+- Milestone 6: [PCC-171](https://portcoconnect.atlassian.net/browse/PCC-171) - COMPLETE
+- User RBAC: [PCC-309](https://portcoconnect.atlassian.net/browse/PCC-309) - COMPLETE (PCC-310-327)
+
+**CLI Commands Available:**
+```bash
+# Tenant/Flow commands
+descope-mgmt tenant list|create|update|delete|sync
+descope-mgmt flow list|deploy|delete|backup|restore
+
+# User commands (NEW)
+descope-mgmt user list|get|invite|update|delete|add-role|remove-role
+
+# Role commands (NEW)
+descope-mgmt role list|create|update|delete
+```
 
 ## Archives
 
@@ -90,7 +101,52 @@
 - All work pushed to GitHub
 
 ### Phase 2: Advanced Features (Weeks 5-6)
-⏸️ Not started
+
+#### Milestone 6: Advanced Operations ✅ COMPLETE
+**Period:** 2025-12-01
+**Status:** ✅ COMPLETE (12 of 12 chunks)
+**Plan:** `plans/milestone-6-advanced-ops/`
+
+**Completed Subtasks:**
+- ✅ PCC-252: Batch Executor Refactoring (Chunks 1-3)
+- ✅ PCC-253: Tenant Delete Command (Chunks 4-5)
+- ✅ PCC-254: Flow Delete Command (Chunks 6-7)
+- ✅ PCC-255: Audit Log Enhancements (Chunks 8-10)
+- ✅ PCC-256: Rate Limit Verification (Chunks 11-12)
+
+**Metrics:**
+- Tests: 213 → 285 (+72)
+- Coverage: 92% maintained
+- Commits: 8 clean conventional commits
+- Time: ~2 hours
+
+#### User RBAC Management ✅ COMPLETE
+**Period:** 2025-12-02
+**Status:** ✅ COMPLETE (13 of 13 chunks)
+**Plan:** `plans/user-rbac-management/`
+**Jira Epic:** PCC-309
+
+**Completed Phases:**
+- ✅ Phase 1: Data Models & Exceptions (Chunks 1, 2a, 2)
+- ✅ Phase 2: API Client Methods (Chunks 3, 4, 5)
+- ✅ Phase 3: Domain Layer (Chunks 6, 7)
+- ✅ Phase 4: CLI Commands (Chunks 8, 9, 10)
+- ✅ Phase 5: Integration & Testing (Chunks 11, 12)
+
+**New CLI Commands:**
+- User: list, get, invite, update, delete, add-role, remove-role
+- Role: list, create, update, delete
+
+**API Fixes Applied:**
+- get_user: Nested response parsing
+- update_user: Granular endpoints with loginId
+- role assignment: loginId + correct v1/v2 endpoints
+
+**Metrics:**
+- Tests: 285 → 372 (+87)
+- Coverage: 90%
+- Commits: 11 feature + 2 API fixes
+- Time: ~3 hours (90 min actual vs 195 min estimated)
 
 ### Phase 3: Production Readiness (Weeks 7-8)
 ⏸️ Not started

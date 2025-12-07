@@ -13,7 +13,17 @@
       "Bash(cat:*)",
       "Bash(python:*)",
       "Skill(cc-unleashed:execute-plan)",
-      "Bash(mise run lint)"
+      "Bash(mise run lint)",
+      "mcp__tavily__tavily-crawl",
+      "Bash(timeout 60 $HOME/.claude/plugins/marketplaces/rlg-unleashed-marketplace/skills/consensus/scripts/consensus.sh:*)",
+      "Bash(curl:*)",
+      "SlashCommand(/cc-unleashed:plan-execute)",
+      "Bash(git worktree:*)",
+      "Bash(source .env)",
+      "mcp__jira-pcc__getJiraProjectIssueTypesMetadata",
+      "Bash(docker compose:*)",
+      "Bash(docker-compose config:*)",
+      "Bash(test:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

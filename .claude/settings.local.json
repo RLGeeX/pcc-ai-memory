@@ -32,13 +32,17 @@
       "Bash(gcloud alloydb instances list:*)",
       "Bash(gcloud compute routers nats list:*)",
       "Bash(gcloud compute routers list:*)",
-      "Bash(gcloud compute instances describe:*)"
+      "Bash(gcloud compute instances describe:*)",
+      "Bash(tree:*)",
+      "mcp__jira-pcc__getVisibleJiraProjects",
+      "Skill(cc-unleashed:jira-plan)",
+      "Bash(cat:*)"
     ],
     "deny": [],
     "ask": []
   },
+  "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
     "jira-pcc"
-  ],
-  "enableAllProjectMcpServers": true
+  ]
 }
